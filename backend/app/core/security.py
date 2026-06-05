@@ -5,16 +5,20 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from app.core.config import settings
 
+# 密码加密上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    # 验证hash密码
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
+    # hash加密
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
+    # 生成token
+    to_encode = data.copy()     # 一般是 user id 相关内容
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
@@ -23,7 +27,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def decode_access_token(token: str) -> dict:
+    # 解析token
     try:
+        # 验证token未被篡改且未过期后，返回payload
         payload = jwt.decode(
             token, settings.APP_SECRET_KEY, algorithms=[settings.APP_ALGORITHM]
         )
@@ -31,6 +37,6 @@ def decode_access_token(token: str) -> dict:
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="token过期",
+            detail="token验证失败",
             headers={"WWW-Authenticate": "Bearer"},
         )
