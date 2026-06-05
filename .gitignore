@@ -1,0 +1,10 @@
+# 后端控制
+
+# 环境变量
+backend/.env
+# 文件存储目录
+backend/uploads
+# SQLite 数据库文件（本地数据，不入库）
+*.db
+*.sqlite
+*.sqlite3
