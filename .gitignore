@@ -4,6 +4,11 @@
 backend/.env
 # 文件存储目录
 backend/uploads
+# 忽略 Python 字节码缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
 # SQLite 数据库文件（本地数据，不入库）
 *.db
 *.sqlite

@@ -5,7 +5,6 @@ export type UserRole = 'normal' | 'premium'
 export interface User {
   id: number
   username: string
-  email: string
   role: UserRole
 }
 
@@ -22,7 +21,6 @@ export interface LoginPayload {
 
 export interface RegisterPayload {
   username: string
-  email: string
   password: string
   role: UserRole
 }

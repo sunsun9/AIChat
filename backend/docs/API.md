@@ -43,7 +43,6 @@
 ```json
 {
   "username": "zhangsan",
-  "email": "zhangsan@example.com",
   "password": "mypassword",
   "role": "normal"
 }
@@ -52,7 +51,6 @@
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | username | string | 是 | 用户名，3～50 个字符 |
-| email | string | 是 | 邮箱地址，全局唯一 |
 | password | string | 是 | 密码，至少 6 个字符 |
 | role | string | 否 | 用户角色：`normal`（默认）/ `premium` |
 
@@ -65,7 +63,6 @@
   "data": {
     "id": 3,
     "username": "zhangsan",
-    "email": "zhangsan@example.com",
     "role": "normal",
     "is_active": true,
     "created_at": "2026-06-06T08:00:00"
@@ -106,7 +103,6 @@
     "user": {
       "id": 3,
       "username": "zhangsan",
-      "email": "zhangsan@example.com",
       "role": "normal",
       "is_active": true,
       "created_at": "2026-06-06T08:00:00"
@@ -138,7 +134,6 @@
   "data": {
     "id": 3,
     "username": "zhangsan",
-    "email": "zhangsan@example.com",
     "role": "normal",
     "is_active": true,
     "created_at": "2026-06-06T08:00:00"

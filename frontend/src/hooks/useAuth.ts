@@ -8,14 +8,12 @@ export type AuthMode = 'login' | 'register'
 
 export interface AuthFormValues {
   username: string
-  email: string
   password: string
   role: UserRole
 }
 
 const DEFAULT_FORM: AuthFormValues = {
   username: '',
-  email: '',
   password: '',
   role: 'normal',
 }
@@ -53,7 +51,7 @@ export function useAuth() {
       if (mode === 'register') {
         await register(form)
         setMode('login')
-        setForm((prev) => ({ ...prev, email: '', role: 'normal' }))
+        setForm((prev) => ({ ...prev, role: 'normal' }))
         return
       }
 

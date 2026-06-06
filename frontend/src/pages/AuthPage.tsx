@@ -96,16 +96,6 @@ export default function AuthPage() {
 
           {mode === 'register' && (
             <div className="animate-fade-up">
-              <FormField label="邮箱">
-                <input
-                  type="email"
-                  className="input-field"
-                  placeholder="your@email.com"
-                  value={form.email}
-                  onChange={setField('email')}
-                  required
-                />
-              </FormField>
             </div>
           )}
 

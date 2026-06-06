@@ -31,7 +31,6 @@
 ├─────────────────┤
 │ id (PK)         │
 │ username        │
-│ email           │
 │ hashed_password │
 │ role            │
 │ is_active       │
@@ -185,7 +184,6 @@
 |----|--------|----------|------|
 | `users` | `id` | PRIMARY KEY | 主键，自动创建 |
 | `users` | `username` | UNIQUE INDEX | 加速登录查询与唯一性校验 |
-| `users` | `email` | UNIQUE INDEX | 加速注册去重校验 |
 | `conversations` | `id` | PRIMARY KEY | 主键，自动创建 |
 | `messages` | `id` | PRIMARY KEY | 主键，自动创建 |
 | `file_attachments` | `id` | PRIMARY KEY | 主键，自动创建 |
@@ -236,10 +234,10 @@ WHERE id = :attachment_id
 
 运行 `python seed.py` 后，数据库中会预置以下数据：
 
-| username | email | password | role |
-|----------|-------|----------|------|
-| `normal_user` | `normal@example.com` | `password123` | `normal` |
-| `premium_user` | `premium@example.com` | `password123` | `premium` |
+| username | password | role |
+|----------|----------|------|
+| `normal_user` | `password123` | `normal` |
+| `premium_user` | `password123` | `premium` |
 
 ---
 
