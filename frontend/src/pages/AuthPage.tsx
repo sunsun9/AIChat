@@ -76,7 +76,7 @@ export default function AuthPage() {
             智能问答系统
           </h1>
           <p className="text-sm mt-1.5" style={{ color: 'var(--text-soft)' }}>
-            由 Claude AI 驱动
+            由 DeepSeek 驱动
           </p>
         </div>
 

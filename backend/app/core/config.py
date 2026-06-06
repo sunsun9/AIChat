@@ -11,8 +11,7 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./aichat.db"
 
-    # Anthropic
-    ANTHROPIC_API_KEY: str = ""
+    DASHSCOPE_API_KEY: str = ""
 
     # File Upload
     UPLOAD_DIR: str = "uploads"
