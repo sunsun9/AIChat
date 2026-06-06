@@ -1,9 +1,9 @@
 /**
  * services/chatService.ts
  *
- * 对话和消息的业务逻辑。
- * 处理乐观消息 ID、对话列表更新（patching）以及 API 编排。
- * 纯函数 — 不引入 Zustand。
+ * 会话与消息相关业务逻辑。
+ * 负责乐观消息 ID 的生成、会话列表的局部更新及 API 调用编排。
+ * 纯函数，不引入 Zustand。
  */
 import axios from 'axios'
 import { chatApi } from '@/api'
@@ -12,9 +12,10 @@ import type {
   ConversationDetail,
   OptimisticMessage,
   SendMessageParams,
+  ApiError,
 } from '@/types'
 
-// ── 辅助函数 ──
+// ── 辅助函数 ────
 export function makeOptimisticMessage(question: string): OptimisticMessage {
   return {
     id: `opt-${Date.now()}`,
@@ -26,18 +27,21 @@ export function makeOptimisticMessage(question: string): OptimisticMessage {
   }
 }
 
+/** 从聊天错误中提取用户友好的提示信息。 */
 export function extractChatError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const detail = (err.response?.data as { detail?: string })?.detail
-    return detail ?? '操作失败，请重试'
+    // 新统一错误格式：{ code, msg, data: null }
+    const msg = (err.response?.data as Partial<ApiError>)?.msg
+    return msg ?? '操作失败，请重试'
   }
+  if (err instanceof Error) return err.message
   return '操作失败，请重试'
 }
 
 /**
- * 在现有列表中插入或更新对话摘要 (Upsert)。
- * 如果是新对话，则将其添加到列表头部。
- * 如果对话已存在，则更新 message_count 和 updated_at。
+ * 将会话摘要更新到列表中。
+ * 若为新会话则插入到列表头部；
+ * 若已存在则更新 message_count 和 updated_at。
  */
 export function upsertConversationInList(
   list: ConversationSummary[],
@@ -58,7 +62,7 @@ export function upsertConversationInList(
   return [summary, ...list]
 }
 
-// ── API 操作 ───
+// ── API 操作 ────
 export async function fetchConversations(): Promise<ConversationSummary[]> {
   const { data } = await chatApi.listConversations()
   return data
@@ -75,8 +79,8 @@ export interface SendResult {
 }
 
 /**
- * 发送消息并返回刷新后的对话。
- * 调用者负责处理乐观的 UI 更新。
+ * 发送消息并返回刷新后的会话数据。
+ * 乐观 UI 更新由调用方负责。
  */
 export async function sendMessage(
   activeConversationId: number | null,

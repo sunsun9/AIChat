@@ -1,32 +1,15 @@
-"""
-聊天路由 – 与大语言模型 (LLM) 进行问答交互。
-
-POST /chat/ask
-  → 接收问题 + 可选的附件 ID 列表（仅限高级会员）
-  → 返回 AI 的回答
-
-GET  /chat/conversations
-  → 列出当前用户的所有历史对话记录
-
-GET  /chat/conversations/{conv_id}
-  → 获取单个对话的完整详情和消息列表
-
-DELETE /chat/conversations/{conv_id}
-  → 删除指定的对话及其所有消息
-"""
-
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.response import ok
 from app.models.models import (
     User, UserRole, Conversation, Message, MessageRole, FileAttachment
 )
 from app.schemas.schemas import (
-    ChatRequest, ChatResponse, ConversationOut, ConversationDetail,
-    FileAttachmentInfo, MessageResponse
+    ChatRequest, ConversationOut, FileAttachmentInfo, MessageOut
 )
 from app.services.llm_service import ask_llm
 from app.services.file_service import read_attachment_content, get_attachment_or_404
@@ -34,17 +17,17 @@ from app.services.file_service import read_attachment_content, get_attachment_or
 router = APIRouter(prefix="/chat", tags=["Chat / Q&A"])
 
 
-# ─────────────────────────── 问答接口 ────────────────────────────────────
+# ─────────────────────────── Ask ────────────────────────────────────
 
-@router.post("/ask", response_model=ChatResponse)
+@router.post("/ask")
 async def ask(
     payload: ChatRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """提交问题并获取 AI 的回答。"""
+    """提交问题，获取 AI 回答。"""
 
-    # ── 1. 解析现有对话或创建新对话 ──
+    # ── 1. 解析或创建会话 ────
     if payload.conversation_id:
         conv = db.query(Conversation).filter(
             Conversation.id == payload.conversation_id,
@@ -53,16 +36,15 @@ async def ask(
         if not conv:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="对话不存在",
+                detail="会话不存在",
             )
     else:
-        # 自动截取问题的前 40 个字符作为新对话的标题
         title = payload.question[:40] + ("…" if len(payload.question) > 40 else "")
         conv = Conversation(user_id=current_user.id, title=title)
         db.add(conv)
         db.flush()
 
-    # ── 2. 处理附件（仅限高级会员） ──
+    # ── 2. 处理附件（仅 premium 用户）──
     file_contents: List[dict] = []
     used_attachments: List[FileAttachment] = []
 
@@ -70,7 +52,7 @@ async def ask(
         if current_user.role != UserRole.PREMIUM:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="文件附件问答功能仅限高级会员 (Premium) 使用",
+                detail="附件功能仅限高级用户使用",
             )
         for att_id in payload.attachment_ids:
             att = get_attachment_or_404(att_id, current_user.id, db)
@@ -78,7 +60,7 @@ async def ask(
             file_contents.append({"filename": att.original_filename, "content": content})
             used_attachments.append(att)
 
-    # ── 3. 为 LLM 构建对话历史上下文 ──
+    # ── 3. 构建历史消息上下文 ───
     prior_messages = (
         db.query(Message)
         .filter(
@@ -86,7 +68,7 @@ async def ask(
             Message.content != "[file upload placeholder]",
         )
         .order_by(Message.created_at)
-        .limit(20)          # keep context manageable
+        .limit(20)
         .all()
     )
     history = [
@@ -94,7 +76,7 @@ async def ask(
         for msg in prior_messages
     ]
 
-    # ── 4. 调用 AI 核心服务 ──
+    # ── 4. 调用 LLM ──
     try:
         answer = await ask_llm(
             history=history,
@@ -109,10 +91,10 @@ async def ask(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"服务暂时不可用: {str(exc)}",
+            detail=f"LLM 服务异常：{str(exc)}",
         )
 
-    # ── 5. 将用户的提问存入数据库 ──
+    # ── 5. 保存用户消息 ────
     user_msg = Message(
         conversation_id=conv.id,
         role=MessageRole.USER,
@@ -121,11 +103,10 @@ async def ask(
     db.add(user_msg)
     db.flush()
 
-    # 关键逻辑：将刚才用到的附件，从临时占位符重新绑定到这条真正的用户消息上！
     for att in used_attachments:
         att.message_id = user_msg.id
 
-    # ── 6. 将 AI 的回答存入数据库 ──
+    # ── 6. 保存 AI 回答 ────
     assistant_msg = Message(
         conversation_id=conv.id,
         role=MessageRole.ASSISTANT,
@@ -135,24 +116,25 @@ async def ask(
     db.commit()
     db.refresh(assistant_msg)
 
-    return ChatResponse(
-        conversation_id=conv.id,
-        message_id=assistant_msg.id,
-        answer=answer,
-        used_attachments=[
-            FileAttachmentInfo.model_validate(a) for a in used_attachments
+    return ok({
+        "conversation_id": conv.id,
+        "message_id": assistant_msg.id,
+        "answer": answer,
+        "used_attachments": [
+            FileAttachmentInfo.model_validate(a).model_dump(mode="json")
+            for a in used_attachments
         ],
-    )
+    })
 
 
-# ─────────────────────────── 对话历史管理 ──────────────────────────
+# ─────────────────────────── Conversations ──────────────────────────
 
-@router.get("/conversations", response_model=List[ConversationOut])
+@router.get("/conversations")
 def list_conversations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """返回当前登录用户的所有对话列表"""
+    """返回当前用户的所有会话，按最后更新时间倒序排列。"""
     convs = (
         db.query(Conversation)
         .filter(Conversation.user_id == current_user.id)
@@ -165,25 +147,25 @@ def list_conversations(
             Message.conversation_id == c.id,
             Message.content != "[file upload placeholder]",
         ).count()
-        out = ConversationOut.model_validate(c)
-        out.message_count = count
+        out = ConversationOut.model_validate(c).model_dump(mode="json")
+        out["message_count"] = count
         result.append(out)
-    return result
+    return ok(result)
 
 
-@router.get("/conversations/{conv_id}", response_model=ConversationDetail)
+@router.get("/conversations/{conv_id}")
 def get_conversation(
     conv_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """返回单个对话的详细信息及其包含的所有聊天记录"""
+    """返回指定会话及其所有消息。"""
     conv = db.query(Conversation).filter(
         Conversation.id == conv_id,
         Conversation.user_id == current_user.id,
     ).first()
     if not conv:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="对话不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
 
     messages = (
         db.query(Message)
@@ -194,27 +176,28 @@ def get_conversation(
         .order_by(Message.created_at)
         .all()
     )
-    count = len(messages)
-    detail = ConversationDetail.model_validate(conv)
-    detail.messages = messages
-    detail.message_count = count
-    return detail
+    detail = ConversationOut.model_validate(conv).model_dump(mode="json")
+    detail["message_count"] = len(messages)
+    detail["messages"] = [
+        MessageOut.model_validate(m).model_dump(mode="json") for m in messages
+    ]
+    return ok(detail)
 
 
-@router.delete("/conversations/{conv_id}", response_model=MessageResponse)
+@router.delete("/conversations/{conv_id}")
 def delete_conversation(
     conv_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """删除对话及其所有消息"""
+    """删除会话及其所有消息（级联删除）。"""
     conv = db.query(Conversation).filter(
         Conversation.id == conv_id,
         Conversation.user_id == current_user.id,
     ).first()
     if not conv:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="对话不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
 
     db.delete(conv)
     db.commit()
-    return MessageResponse(message="成功删除对话")
+    return ok(msg="删除成功")

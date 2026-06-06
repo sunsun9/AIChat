@@ -1,4 +1,5 @@
-// ── User & Auth ──
+// ── 用户与认证 ───────────────────────────────────────────────────────
+
 export type UserRole = 'normal' | 'premium'
 
 export interface User {
@@ -13,7 +14,7 @@ export interface AuthState {
   token: string | null
 }
 
-// ── Login / Register ──
+// ── 登录 / 注册 ────
 export interface LoginPayload {
   username: string
   password: string
@@ -26,13 +27,20 @@ export interface RegisterPayload {
   role: UserRole
 }
 
+/** 登录响应（拦截器解包 { code, msg, data } 后的业务数据） */
 export interface LoginResponse {
-  access_token: string
-  token_type: string
+  token: string   // 后端重构后由 access_token 改名为 token
   user: User
 }
 
-// ── Attachment ───
+// ── 统一响应包装（供高级用法参考）────
+export interface ApiResponse<T = unknown> {
+  code: number
+  msg: string
+  data: T
+}
+
+// ── 附件 ───
 export interface Attachment {
   id: number
   original_filename: string
@@ -40,7 +48,7 @@ export interface Attachment {
   content_preview?: string
 }
 
-// ── Message ───
+// ── 消息 ────
 export type MessageRole = 'user' | 'assistant'
 
 export interface Message {
@@ -51,14 +59,14 @@ export interface Message {
   attachments: Attachment[]
 }
 
-/** 用户已发送消息，但是服务器还未响应 */
+/** 服务器确认前乐观插入的用户消息 */
 export interface OptimisticMessage extends Message {
   id: `opt-${number}`
   isOptimistic: true
 }
 
-// ── Conversation ───
-/** 列表显示对应对象形状 */
+// ── 会话 ───
+/** 侧边栏列表中展示的会话摘要 */
 export interface ConversationSummary {
   id: number
   title: string
@@ -67,12 +75,12 @@ export interface ConversationSummary {
   message_count: number
 }
 
-/** 对话的消息 */
+/** 打开会话后加载的完整数据（含消息列表） */
 export interface ConversationDetail extends ConversationSummary {
   messages: (Message | OptimisticMessage)[]
 }
 
-// ── API payloads ───
+// ── 接口请求体 ───
 export interface AskPayload {
   conversation_id: number | null
   question: string
@@ -91,12 +99,14 @@ export interface UploadResponse {
   content_preview: string
 }
 
-// ── API error ───
+// ── 接口错误（新统一格式）───
 export interface ApiError {
-  detail: string
+  code: number
+  msg: string
+  data: null
 }
 
-// ── UI state helpers ───
+// ── UI 状态辅助类型 ───
 export interface SendMessageParams {
   question: string
   attachmentIds?: number[]

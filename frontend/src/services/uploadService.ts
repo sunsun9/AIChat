@@ -1,15 +1,14 @@
 /**
  * services/uploadService.ts
  *
- * 文件验证规则和上传编排。
- * 将这些逻辑保留在此处可以使组件保持轻量，
- * 并且规则易于在同一个地方集中更新。
+ * 文件校验规则与上传编排逻辑。
+ * 集中管理规则便于统一修改，保持组件层轻量。
  */
 import axios from 'axios'
 import { uploadApi } from '@/api'
-import type { Attachment } from '@/types'
+import type { Attachment, ApiError } from '@/types'
 
-// ── 验证规则 ──
+// ── 校验规则 ───
 const ALLOWED_EXTENSIONS = ['.txt']
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 
@@ -34,7 +33,7 @@ export function validateFile(file: File): ValidationResult {
   return { valid: true }
 }
 
-// ── 上传操作 ───
+// ── 上传操作 ────
 export interface UploadResult {
   attachment: Attachment
 }
@@ -54,10 +53,13 @@ export async function uploadFile(
   }
 }
 
+/** 从上传错误中提取用户友好的提示信息。 */
 export function extractUploadError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const detail = (err.response?.data as { detail?: string })?.detail
-    return detail ?? '上传失败，请重试'
+    // 新统一错误格式：{ code, msg, data: null }
+    const msg = (err.response?.data as Partial<ApiError>)?.msg
+    return msg ?? '上传失败，请重试'
   }
+  if (err instanceof Error) return err.message
   return '上传失败，请重试'
 }

@@ -1,9 +1,11 @@
 """
-LLM 问答系统 – FastAPI 后端主入口
+LLM Q&A System – FastAPI Backend
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import os
 
@@ -11,28 +13,68 @@ from app.core.database import engine, Base
 from app.core.config import settings
 from app.api import auth, chat, upload
 
-# ── 在应用启动时，自动创建所有数据库表 ──
+# ── 数据库初始化 ───
 Base.metadata.create_all(bind=engine)
 
-# ── App factory ──
+# ── App factory ───
 app = FastAPI(
-    title="LLM 问答系统",
+    title="LLM Q&A System",
     description=(
-        "基于 Claude 驱动的智能问答系统。 "
-        "支持基于角色的权限控制：普通用户（仅限纯文本聊天） "
-        "和高级会员（支持文本 + 文件附件上传）。"
+        "Intelligent Q&A system powered by Claude. "
+        "Supports role-based access: normal users (text only) "
+        "and premium users (text + file attachments)."
     ),
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# ── Health check ─────────────────────────────────────────────────────
+
+# ── 全局异常处理：统一包装为 { code, msg, data } ─────────────────────
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.status_code, "msg": exc.detail, "data": None},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    msg = exc.errors()[0]["msg"] if exc.errors() else "请求参数校验失败"
+    return JSONResponse(
+        status_code=422,
+        content={"code": 422, "msg": msg, "data": None},
+    )
+
+
+# ── CORS ───
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── 路由 ───
+app.include_router(auth.router,   prefix="/api/v1")
+app.include_router(chat.router,   prefix="/api/v1")
+app.include_router(upload.router, prefix="/api/v1")
+
+
+# ── Health check ───
 @app.get("/health", tags=["System"])
 def health():
-    return {"status": "ok", "service": "LLM Q&A Backend"}
+    return {"code": 0, "msg": "success", "data": {"status": "ok", "service": "LLM Q&A Backend"}}
 
 
-# ── Serve uploaded files (dev convenience) ───────────────────────────
+# ── Serve uploaded files (dev convenience) ───
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")

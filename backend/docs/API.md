@@ -5,23 +5,29 @@
 
 ## 统一响应格式
 
-> **注意**：本后端基于 FastAPI 开发，接口响应直接返回业务数据，**不使用统一包装格式**，HTTP 状态码即为业务状态。错误信息通过 `detail` 字段描述。
-
-**成功响应示例**（直接返回数据）：
+所有 JSON 接口均采用以下统一格式返回：
 
 ```json
 {
-  "id": 1,
-  "username": "zhangsan",
-  "role": "normal"
+  "code": 0,
+  "msg": "success",
+  "data": ...
 }
 ```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| code | number | 状态码，`0` 表示成功，非 `0` 为 HTTP 错误状态码 |
+| msg | string | 提示信息，成功时为 `"success"`，失败时为具体错误描述 |
+| data | any | 业务数据，失败时为 `null` |
 
 **错误响应示例**：
 
 ```json
 {
-  "detail": "Username already taken"
+  "code": 401,
+  "msg": "用户名或密码错误",
+  "data": null
 }
 ```
 
@@ -54,22 +60,26 @@
 
 ```json
 {
-  "id": 3,
-  "username": "zhangsan",
-  "email": "zhangsan@example.com",
-  "role": "normal",
-  "is_active": true,
-  "created_at": "2026-06-06T08:00:00Z"
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 3,
+    "username": "zhangsan",
+    "email": "zhangsan@example.com",
+    "role": "normal",
+    "is_active": true,
+    "created_at": "2026-06-06T08:00:00"
+  }
 }
 ```
 
 - **失败响应**:
 
-| 状态码 | 示例 |
-|--------|------|
-| 409 | `{ "detail": "Username already taken" }` |
-| 409 | `{ "detail": "Email already registered" }` |
-| 422 | `{ "detail": [{ "msg": "Password must be at least 6 characters" }] }` |
+| 状态码 | msg |
+|--------|-----|
+| 409 | 用户名已被占用 |
+| 409 | 邮箱已被注册 |
+| 422 | 字段校验失败（如密码过短） |
 
 ---
 
@@ -89,27 +99,30 @@
 
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "user": {
-    "id": 3,
-    "username": "zhangsan",
-    "email": "zhangsan@example.com",
-    "role": "normal",
-    "is_active": true,
-    "created_at": "2026-06-06T08:00:00Z"
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "user": {
+      "id": 3,
+      "username": "zhangsan",
+      "email": "zhangsan@example.com",
+      "role": "normal",
+      "is_active": true,
+      "created_at": "2026-06-06T08:00:00"
+    }
   }
 }
 ```
 
-> Token 有效期默认 **60 分钟**，后续请求将其放入请求头：`Authorization: Bearer <access_token>`
+> Token 有效期默认 **60 分钟**，后续请求将其放入请求头：`Authorization: Bearer <token>`
 
 - **失败响应**:
 
-| 状态码 | 示例 |
-|--------|------|
-| 401 | `{ "detail": "Incorrect username or password" }` |
-| 403 | `{ "detail": "Account is deactivated" }` |
+| 状态码 | msg |
+|--------|-----|
+| 401 | 用户名或密码错误 |
+| 403 | 账号已被禁用 |
 
 ---
 
@@ -120,20 +133,24 @@
 
 ```json
 {
-  "id": 3,
-  "username": "zhangsan",
-  "email": "zhangsan@example.com",
-  "role": "normal",
-  "is_active": true,
-  "created_at": "2026-06-06T08:00:00Z"
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 3,
+    "username": "zhangsan",
+    "email": "zhangsan@example.com",
+    "role": "normal",
+    "is_active": true,
+    "created_at": "2026-06-06T08:00:00"
+  }
 }
 ```
 
 - **失败响应**:
 
-| 状态码 | 示例 |
-|--------|------|
-| 401 | `{ "detail": "Token invalid or expired" }` |
+| 状态码 | msg |
+|--------|-----|
+| 401 | Token invalid or expired |
 
 ---
 
@@ -159,32 +176,26 @@
 | conversation_id | number \| null | 否 | 已有会话 ID；传 `null` 时自动创建新会话 |
 | attachment_ids | number[] | 否 | 已上传附件的 ID 列表，默认 `[]`（仅 premium 用户可传） |
 
-- **续会话携带附件示例**:
-
-```json
-{
-  "conversation_id": 12,
-  "question": "请根据文件中的数据给出总结",
-  "attachment_ids": [5, 6]
-}
-```
-
 - **成功响应** (200):
 
 ```json
 {
-  "conversation_id": 12,
-  "message_id": 45,
-  "answer": "根据您上传的文件，以下是数据摘要……",
-  "used_attachments": [
-    {
-      "id": 5,
-      "original_filename": "data.txt",
-      "file_size": 2048,
-      "content_preview": "第一行内容……",
-      "created_at": "2026-06-06T08:05:00Z"
-    }
-  ]
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "conversation_id": 12,
+    "message_id": 45,
+    "answer": "机器学习是人工智能的一个分支……",
+    "used_attachments": [
+      {
+        "id": 5,
+        "original_filename": "data.txt",
+        "file_size": 2048,
+        "content_preview": "第一行内容……",
+        "created_at": "2026-06-06T08:05:00"
+      }
+    ]
+  }
 }
 ```
 
@@ -192,17 +203,17 @@
 - `conversation_id` — 当前会话 ID（新建或已有）
 - `message_id` — AI 回答消息的数据库 ID
 - `answer` — AI 生成的回答内容（Markdown 格式）
-- `used_attachments` — 本次问答中实际读取的附件列表
+- `used_attachments` — 本次实际读取的附件列表，无附件时为 `[]`
 
 - **失败响应**:
 
-| 状态码 | 示例 |
-|--------|------|
-| 401 | `{ "detail": "Token invalid or expired" }` |
-| 403 | `{ "detail": "File attachments are only available to premium users" }` |
-| 404 | `{ "detail": "Conversation not found" }` |
-| 502 | `{ "detail": "LLM service error: ..." }` |
-| 503 | `{ "detail": "ANTHROPIC_API_KEY is not set." }` |
+| 状态码 | msg |
+|--------|-----|
+| 401 | Token invalid or expired |
+| 403 | 附件功能仅限高级用户使用 |
+| 404 | 会话不存在 |
+| 502 | LLM 服务异常：... |
+| 503 | ANTHROPIC_API_KEY is not set. |
 
 ---
 
@@ -213,22 +224,26 @@
 - **成功响应** (200):
 
 ```json
-[
-  {
-    "id": 12,
-    "title": "什么是机器学习？…",
-    "created_at": "2026-06-06T08:00:00Z",
-    "updated_at": "2026-06-06T08:10:00Z",
-    "message_count": 4
-  },
-  {
-    "id": 11,
-    "title": "Python 列表推导式的用法…",
-    "created_at": "2026-06-05T14:30:00Z",
-    "updated_at": "2026-06-05T14:35:00Z",
-    "message_count": 2
-  }
-]
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "id": 12,
+      "title": "什么是机器学习？…",
+      "created_at": "2026-06-06T08:00:00",
+      "updated_at": "2026-06-06T08:10:00",
+      "message_count": 4
+    },
+    {
+      "id": 11,
+      "title": "Python 列表推导式的用法…",
+      "created_at": "2026-06-05T14:30:00",
+      "updated_at": "2026-06-05T14:35:00",
+      "message_count": 2
+    }
+  ]
+}
 ```
 
 > `title` 由首条用户消息的前 40 个字符自动生成
@@ -243,27 +258,31 @@
 
 ```json
 {
-  "id": 12,
-  "title": "什么是机器学习？…",
-  "created_at": "2026-06-06T08:00:00Z",
-  "updated_at": "2026-06-06T08:10:00Z",
-  "message_count": 4,
-  "messages": [
-    {
-      "id": 41,
-      "role": "user",
-      "content": "什么是机器学习？",
-      "created_at": "2026-06-06T08:00:10Z",
-      "attachments": []
-    },
-    {
-      "id": 42,
-      "role": "assistant",
-      "content": "机器学习是人工智能的一个分支……",
-      "created_at": "2026-06-06T08:00:15Z",
-      "attachments": []
-    }
-  ]
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "id": 12,
+    "title": "什么是机器学习？…",
+    "created_at": "2026-06-06T08:00:00",
+    "updated_at": "2026-06-06T08:10:00",
+    "message_count": 4,
+    "messages": [
+      {
+        "id": 41,
+        "role": "user",
+        "content": "什么是机器学习？",
+        "created_at": "2026-06-06T08:00:10",
+        "attachments": []
+      },
+      {
+        "id": 42,
+        "role": "assistant",
+        "content": "机器学习是人工智能的一个分支……",
+        "created_at": "2026-06-06T08:00:15",
+        "attachments": []
+      }
+    ]
+  }
 }
 ```
 
@@ -273,9 +292,9 @@
 
 - **失败响应**:
 
-| 状态码 | 示例 |
-|--------|------|
-| 404 | `{ "detail": "Conversation not found" }` |
+| 状态码 | msg |
+|--------|-----|
+| 404 | 会话不存在 |
 
 ---
 
@@ -287,21 +306,23 @@
 
 ```json
 {
-  "message": "Conversation deleted successfully"
+  "code": 0,
+  "msg": "删除成功",
+  "data": null
 }
 ```
 
 - **失败响应**:
 
-| 状态码 | 示例 |
-|--------|------|
-| 404 | `{ "detail": "Conversation not found" }` |
+| 状态码 | msg |
+|--------|-----|
+| 404 | 会话不存在 |
 
 ---
 
 ## 三、文件上传模块
 
-> ⚠️ 本模块**仅限 premium 角色用户**调用，普通用户访问将返回 `403 Forbidden`
+> ⚠️ 本模块**仅限 premium 角色用户**调用，普通用户访问将返回 403
 
 ### 3.1 上传文件
 
@@ -328,11 +349,14 @@ curl -X POST http://localhost:8000/api/v1/upload/file \
 
 ```json
 {
-  "attachment_id": 5,
-  "original_filename": "document.txt",
-  "file_size": 2048,
-  "content_preview": "这是文件的前 500 个字符……",
-  "message": "File uploaded successfully"
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "attachment_id": 5,
+    "original_filename": "document.txt",
+    "file_size": 2048,
+    "content_preview": "这是文件的前 500 个字符……"
+  }
 }
 ```
 
@@ -342,10 +366,10 @@ curl -X POST http://localhost:8000/api/v1/upload/file \
 
 - **失败响应**:
 
-| 状态码 | 示例 |
-|--------|------|
-| 403 | `{ "detail": "This feature is only available to premium users" }` |
-| 422 | `{ "detail": [{ "msg": "文件格式或大小不合规" }] }` |
+| 状态码 | msg |
+|--------|-----|
+| 403 | This feature is only available to premium users |
+| 422 | 文件格式或大小不合规 |
 
 ---
 
@@ -359,8 +383,12 @@ curl -X POST http://localhost:8000/api/v1/upload/file \
 
 ```json
 {
-  "status": "ok",
-  "service": "LLM Q&A Backend"
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "status": "ok",
+    "service": "LLM Q&A Backend"
+  }
 }
 ```
 
@@ -369,13 +397,13 @@ curl -X POST http://localhost:8000/api/v1/upload/file \
 ## 接口调用典型流程
 
 ```
-1. POST /api/v1/auth/login          → 获取 token
+1. POST /api/v1/auth/login              → 获取 token
           ↓
-2. POST /api/v1/upload/file         → 获取 attachment_id（仅 premium 用户）
+2. POST /api/v1/upload/file             → 获取 attachment_id（仅 premium 用户）
           ↓
-3. POST /api/v1/chat/ask            → 提问（可携带 attachment_ids）
+3. POST /api/v1/chat/ask                → 提问（可携带 attachment_ids）
           ↓
-4. GET  /api/v1/chat/conversations  → 查看会话列表
+4. GET  /api/v1/chat/conversations      → 查看会话列表
           ↓
 5. GET  /api/v1/chat/conversations/:id  → 查看历史消息
           ↓
@@ -400,7 +428,9 @@ curl -X POST http://localhost:8000/api/v1/upload/file \
 
 ```json
 {
-  "detail": "错误描述信息"
+  "code": 400,
+  "msg": "错误描述信息",
+  "data": null
 }
 ```
 
