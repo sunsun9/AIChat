@@ -4,14 +4,23 @@ import MessageBubble from './MessageBubble'
 import { Bot, MessageSquare } from 'lucide-react'
 import type { Message } from '@/types'
 
-// ── 子组件 ────
 function TypingIndicator() {
   return (
     <div className="flex gap-3 animate-fade-up">
-      <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-amber/10 border border-amber/25 shadow-amber-glow">
-        <Bot size={13} className="text-amber" />
+      <div
+        className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center"
+        style={{
+          background: 'var(--accent-dim)',
+          border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
+          boxShadow: '0 0 12px var(--accent-dim)',
+        }}
+      >
+        <Bot size={13} style={{ color: 'var(--accent)' }} />
       </div>
-      <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-carbon-50 border border-carbon-300">
+      <div
+        className="px-4 py-3 rounded-2xl rounded-tl-sm"
+        style={{ background: 'var(--bubble-ai-bg)', border: '1px solid var(--bubble-ai-border)' }}
+      >
         <div className="flex gap-1 items-center h-4">
           <span className="typing-dot" />
           <span className="typing-dot" />
@@ -32,12 +41,21 @@ function EmptyState() {
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center space-y-4 animate-fade-up max-w-sm px-6">
-        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber/8 border border-amber/20 flex items-center justify-center shadow-amber-glow">
-          <MessageSquare size={28} className="text-amber" />
+        <div
+          className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center"
+          style={{
+            background: 'var(--accent-dim)',
+            border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+            boxShadow: '0 0 24px var(--accent-dim)',
+          }}
+        >
+          <MessageSquare size={28} style={{ color: 'var(--accent)' }} />
         </div>
         <div>
-          <h2 className="font-display font-bold text-ice text-xl mb-2">开始对话</h2>
-          <p className="text-slate-soft text-sm leading-relaxed">
+          <h2 className="font-display font-bold text-xl mb-2" style={{ color: 'var(--text-main)' }}>
+            开始对话
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-soft)' }}>
             在下方输入您的问题，即可与 AI 助手展开对话。
           </p>
         </div>
@@ -45,7 +63,12 @@ function EmptyState() {
           {SUGGESTED_PROMPTS.map((tip) => (
             <div
               key={tip}
-              className="px-3 py-2 rounded-lg bg-carbon-200 border border-carbon-300 text-xs text-slate-soft font-mono"
+              className="px-3 py-2 rounded-lg text-xs font-mono"
+              style={{
+                background: 'var(--bg-raised)',
+                border: '1px solid var(--bg-border)',
+                color: 'var(--text-soft)',
+              }}
             >
               {tip}
             </div>
@@ -68,8 +91,6 @@ function LoadingState() {
   )
 }
 
-// ── 主组件 ────
-/** 从消息列表中过滤掉文件上传的占位符消息。 */
 function useVisibleMessages() {
   const activeConversation = useChatStore((s) => s.activeConversation)
   return (activeConversation?.messages ?? []).filter(

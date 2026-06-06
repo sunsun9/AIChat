@@ -5,20 +5,18 @@ import { Paperclip, Bot, User } from 'lucide-react'
 import clsx from 'clsx'
 import type { Message, Attachment } from '@/types'
 
-// ── 语法高亮主题 ───
 const codeTheme = {
   ...oneDark,
   'pre[class*="language-"]': {
     ...oneDark['pre[class*="language-"]'],
-    background: '#141418',
-    border: '1px solid #28282f',
+    background: 'var(--code-block-bg)',
+    border: '1px solid var(--code-block-border)',
     borderRadius: '8px',
     margin: 0,
     fontSize: '0.8rem',
   },
 }
 
-// ── 子组件 ────
 interface CodeBlockProps {
   className?: string
   children: React.ReactNode
@@ -39,10 +37,19 @@ interface AttachmentChipProps {
 
 function AttachmentChip({ attachment }: AttachmentChipProps) {
   return (
-    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber/8 border border-amber/20 text-amber text-xs font-mono">
+    <div
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono"
+      style={{
+        background: 'var(--accent-dim)',
+        border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+        color: 'var(--accent)',
+      }}
+    >
       <Paperclip size={10} />
       {attachment.original_filename}
-      <span className="text-amber/50">({Math.round(attachment.file_size / 1024)} KB)</span>
+      <span style={{ color: 'color-mix(in srgb, var(--accent) 50%, transparent)' }}>
+        ({Math.round(attachment.file_size / 1024)} KB)
+      </span>
     </div>
   )
 }
@@ -51,7 +58,6 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// ── 主组件 ────
 interface MessageBubbleProps {
   message: Message
 }
@@ -64,23 +70,26 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     <div className={clsx('flex gap-3 animate-fade-up', isUser && 'flex-row-reverse')}>
       {/* 头像 */}
       <div
-        className={clsx(
-          'w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5',
+        className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5"
+        style={
           isUser
-            ? 'bg-carbon-300 border border-carbon-400'
-            : 'bg-amber/10 border border-amber/25 shadow-amber-glow',
-        )}
+            ? { background: 'var(--bg-raised)', border: '1px solid var(--bg-border)' }
+            : {
+                background: 'var(--accent-dim)',
+                border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
+                boxShadow: '0 0 10px var(--accent-dim)',
+              }
+        }
       >
         {isUser ? (
-          <User size={13} className="text-slate-soft" />
+          <User size={13} style={{ color: 'var(--text-soft)' }} />
         ) : (
-          <Bot size={13} className="text-amber" />
+          <Bot size={13} style={{ color: 'var(--accent)' }} />
         )}
       </div>
 
       {/* 消息气泡 */}
       <div className={clsx('max-w-[75%] space-y-2', isUser && 'items-end flex flex-col')}>
-        {/* 附件（在用户消息的气泡上方显示） */}
         {isUser && message.attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 justify-end">
             {message.attachments.map((a) => (
@@ -90,13 +99,22 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         )}
 
         <div
-          className={clsx(
-            'px-4 py-3 rounded-2xl text-sm leading-relaxed',
+          className={clsx('px-4 py-3 rounded-2xl text-sm leading-relaxed', isOptimistic && 'opacity-60')}
+          style={
             isUser
-              ? 'bg-carbon-200 border border-carbon-400 text-ice rounded-tr-sm'
-              : 'bg-carbon-50 border border-carbon-300 text-ice rounded-tl-sm',
-            isOptimistic && 'opacity-60',
-          )}
+              ? {
+                  background: 'var(--bubble-user-bg)',
+                  border: '1px solid var(--bubble-user-border)',
+                  color: 'var(--text-main)',
+                  borderTopRightRadius: '4px',
+                }
+              : {
+                  background: 'var(--bubble-ai-bg)',
+                  border: '1px solid var(--bubble-ai-border)',
+                  color: 'var(--text-main)',
+                  borderTopLeftRadius: '4px',
+                }
+          }
         >
           {isUser ? (
             <p className="font-body whitespace-pre-wrap">{message.content}</p>
@@ -122,9 +140,8 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </div>
 
-        {/* 时间戳 */}
         {!isOptimistic && (
-          <span className="text-[10px] font-mono text-slate-faint px-1">
+          <span className="text-[10px] font-mono px-1" style={{ color: 'var(--text-faint)' }}>
             {formatTime(message.created_at)}
           </span>
         )}

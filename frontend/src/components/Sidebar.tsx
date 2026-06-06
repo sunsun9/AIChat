@@ -18,18 +18,46 @@ export default function Sidebar() {
   }, [])
 
   return (
-    <aside className="w-64 flex-shrink-0 h-full flex flex-col bg-carbon-50 border-r border-carbon-300">
+    <aside
+      className="w-64 flex-shrink-0 h-full flex flex-col border-r"
+      style={{ background: 'var(--sidebar-bg)', borderColor: 'var(--sidebar-border)' }}
+    >
       {/* 头部区域 */}
-      <div className="p-4 border-b border-carbon-300">
+      <div className="p-4 border-b" style={{ borderColor: 'var(--bg-border)' }}>
         <div className="flex items-center gap-2.5 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-amber/10 border border-amber/20 flex items-center justify-center flex-shrink-0">
-            <Zap size={15} className="text-amber" />
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{
+              background: 'var(--accent-dim)',
+              border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+            }}
+          >
+            <Zap size={15} style={{ color: 'var(--accent)' }} />
           </div>
-          <span className="font-display font-bold text-ice text-sm tracking-wide">智能问答</span>
+          <span
+            className="font-display font-bold text-sm tracking-wide"
+            style={{ color: 'var(--text-main)' }}
+          >
+            智能问答
+          </span>
         </div>
         <button
           onClick={newConversation}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-carbon-400 text-slate-soft text-xs font-mono transition-all duration-200 hover:border-amber/40 hover:text-amber hover:bg-amber/5"
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed text-xs font-mono transition-all duration-200"
+          style={{
+            borderColor: 'var(--bg-border)',
+            color: 'var(--text-soft)',
+          }}
+          onMouseEnter={(e) => {
+            ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'color-mix(in srgb, var(--accent) 45%, transparent)'
+            ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)'
+            ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-dim)'
+          }}
+          onMouseLeave={(e) => {
+            ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--bg-border)'
+            ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-soft)'
+            ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+          }}
         >
           <Plus size={14} />
           新对话
@@ -52,8 +80,8 @@ export default function Sidebar() {
 
         {!loading && conversations.length === 0 && (
           <div className="text-center py-10 px-4">
-            <MessageSquare size={28} className="mx-auto mb-2 text-carbon-400" />
-            <p className="text-slate-faint text-xs font-mono">暂无对话记录</p>
+            <MessageSquare size={28} className="mx-auto mb-2" style={{ color: 'var(--text-faint)' }} />
+            <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>暂无对话记录</p>
           </div>
         )}
 
@@ -63,18 +91,31 @@ export default function Sidebar() {
             onClick={() => void openConversation(conv.id)}
             className={clsx(
               'w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left group transition-all duration-150',
-              activeId === conv.id
-                ? 'bg-amber/8 border border-amber/20 text-ice'
-                : 'hover:bg-carbon-200 text-slate-soft hover:text-ice border border-transparent',
             )}
+            style={
+              activeId === conv.id
+                ? {
+                    background: 'var(--accent-dim)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+                    color: 'var(--text-main)',
+                  }
+                : {
+                    border: '1px solid transparent',
+                    color: 'var(--text-soft)',
+                  }
+            }
           >
             <MessageSquare
               size={13}
-              className={clsx('flex-shrink-0', activeId === conv.id ? 'text-amber' : 'text-slate-faint')}
+              className="flex-shrink-0"
+              style={{ color: activeId === conv.id ? 'var(--accent)' : 'var(--text-faint)' }}
             />
             <span className="flex-1 text-xs font-body truncate">{conv.title}</span>
             {conv.message_count > 0 && (
-              <span className="text-[10px] font-mono text-slate-faint opacity-0 group-hover:opacity-100 transition-opacity">
+              <span
+                className="text-[10px] font-mono opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ color: 'var(--text-faint)' }}
+              >
                 {conv.message_count}
               </span>
             )}
@@ -83,10 +124,8 @@ export default function Sidebar() {
               title={pendingId === conv.id ? '再次点击确认' : '删除'}
               className={clsx(
                 'opacity-0 group-hover:opacity-100 transition-all p-0.5 rounded',
-                pendingId === conv.id
-                  ? 'text-ruby-pill opacity-100'
-                  : 'text-slate-faint hover:text-ruby-pill',
               )}
+              style={{ color: pendingId === conv.id ? '#f43f5e' : 'var(--text-faint)' }}
             >
               <Trash2 size={12} />
             </button>
@@ -95,18 +134,25 @@ export default function Sidebar() {
       </div>
 
       {/* 用户底部区域 */}
-      <div className="p-3 border-t border-carbon-300">
-        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg bg-carbon-200 border border-carbon-300">
+      <div className="p-3 border-t" style={{ borderColor: 'var(--bg-border)' }}>
+        <div
+          className="flex items-center gap-2.5 px-2 py-2 rounded-lg"
+          style={{ background: 'var(--bg-raised)', border: '1px solid var(--bg-border)' }}
+        >
           <div
-            className={clsx(
-              'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-display font-bold',
-              isPremium ? 'bg-amber/15 text-amber' : 'bg-carbon-400 text-slate-soft',
-            )}
+            className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-display font-bold"
+            style={
+              isPremium
+                ? { background: 'var(--accent-dim)', color: 'var(--accent)' }
+                : { background: 'var(--bg-border)', color: 'var(--text-soft)' }
+            }
           >
             {user?.username?.[0]?.toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-ice text-xs font-semibold truncate">{user?.username}</p>
+            <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-main)' }}>
+              {user?.username}
+            </p>
             <span className={isPremium ? 'tag-premium' : 'tag-normal'}>
               {isPremium ? <Zap size={9} /> : <User size={9} />}
               {isPremium ? 'Premium' : 'Normal'}
@@ -115,7 +161,10 @@ export default function Sidebar() {
           <button
             onClick={logout}
             title="退出登录"
-            className="text-slate-faint hover:text-ruby-pill transition-colors p-1 rounded"
+            className="p-1 rounded transition-colors"
+            style={{ color: 'var(--text-faint)' }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = '#f43f5e')}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--text-faint)')}
           >
             <LogOut size={14} />
           </button>

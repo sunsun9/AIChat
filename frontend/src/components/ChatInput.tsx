@@ -23,18 +23,26 @@ export default function ChatInput() {
   }
 
   return (
-    <div className="border-t border-carbon-300 bg-carbon-50/80 backdrop-blur-sm px-4 py-3 space-y-2">
+    <div
+      className="border-t px-4 py-3 space-y-2 backdrop-blur-sm"
+      style={{ background: 'var(--chatinput-bg)', borderColor: 'var(--bg-border)' }}
+    >
       {/* 错误提示横幅 */}
       {chat.error && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-ruby-dim border border-ruby-pill/20 text-ruby-pill text-xs font-mono animate-fade-in">
+        <div
+          className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-mono animate-fade-in"
+          style={{
+            background: 'rgba(244,63,94,0.10)',
+            border: '1px solid rgba(244,63,94,0.25)',
+            color: '#f43f5e',
+          }}
+        >
           <span>{chat.error}</span>
-          <button onClick={chat.clearError} className="ml-2 hover:opacity-70">
-            ✕
-          </button>
+          <button onClick={chat.clearError} className="ml-2 hover:opacity-70">✕</button>
         </div>
       )}
 
-      {/* 上传区域 — 仅限高级用户，可切换显示状态 */}
+      {/* 上传区域 */}
       {isPremium && showUpload && (
         <div className="animate-fade-up">
           <FileUploadZone
@@ -52,22 +60,20 @@ export default function ChatInput() {
 
       {/* 输入行 */}
       <div
-        className={clsx(
-          'flex items-end gap-2 rounded-xl border p-2 transition-all duration-200',
-          'bg-carbon-200 border-carbon-400 focus-within:border-amber/40 focus-within:bg-carbon-100/50',
-        )}
+        className="flex items-end gap-2 rounded-xl border p-2 transition-all duration-200"
+        style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)' }}
       >
-        {/* 附件切换按钮（仅限高级用户） */}
+        {/* 附件切换按钮 */}
         {isPremium && (
           <button
             onClick={() => setShowUpload((v) => !v)}
             title="上传附件"
-            className={clsx(
-              'flex-shrink-0 p-2 rounded-lg transition-all duration-150',
+            className="flex-shrink-0 p-2 rounded-lg transition-all duration-150"
+            style={
               showUpload
-                ? 'bg-amber/15 text-amber'
-                : 'text-slate-muted hover:text-amber hover:bg-amber/10',
-            )}
+                ? { background: 'var(--accent-dim)', color: 'var(--accent)' }
+                : { color: 'var(--text-faint)' }
+            }
           >
             <Zap size={16} />
           </button>
@@ -86,8 +92,12 @@ export default function ChatInput() {
               : '输入您的问题… (Enter 发送，Shift+Enter 换行)'
           }
           disabled={chat.sending}
-          className="flex-1 bg-transparent text-ice text-sm font-body placeholder-slate-faint outline-none resize-none leading-relaxed py-1 px-1 min-h-[36px] max-h-[180px]"
-          style={{ overflowY: 'auto' }}
+          className="flex-1 text-sm font-body outline-none resize-none leading-relaxed py-1 px-1 min-h-[36px] max-h-[180px]"
+          style={{
+            background: 'transparent',
+            color: 'var(--text-main)',
+            overflowY: 'auto',
+          }}
         />
 
         {/* 发送按钮 */}
@@ -96,10 +106,20 @@ export default function ChatInput() {
           disabled={!chat.canSend}
           className={clsx(
             'flex-shrink-0 p-2 rounded-lg transition-all duration-150 active:scale-95',
-            chat.canSend
-              ? 'bg-amber text-carbon hover:bg-amber-light shadow-amber-glow'
-              : 'bg-carbon-400 text-slate-faint cursor-not-allowed',
           )}
+          style={
+            chat.canSend
+              ? {
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  boxShadow: '0 0 14px var(--accent-dim)',
+                }
+              : {
+                  background: 'var(--bg-border)',
+                  color: 'var(--text-faint)',
+                  cursor: 'not-allowed',
+                }
+          }
         >
           {chat.sending ? (
             <span className="flex gap-0.5 px-0.5">
@@ -113,7 +133,7 @@ export default function ChatInput() {
         </button>
       </div>
 
-      <p className="text-[10px] text-slate-faint text-center font-mono">
+      <p className="text-[10px] text-center font-mono" style={{ color: 'var(--text-faint)' }}>
         {isPremium
           ? '⚡ 高级用户 · 支持文本 + .txt 附件问答'
           : '文本问答模式 · 升级为高级用户可上传附件'}
