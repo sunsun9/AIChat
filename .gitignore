@@ -8,3 +8,6 @@ backend/uploads
 *.db
 *.sqlite
 *.sqlite3
+
+# 前端控制
+frontend/node_modules
