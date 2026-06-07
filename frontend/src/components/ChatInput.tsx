@@ -26,10 +26,10 @@ export default function ChatInput() {
   }, [activeId])
 
   const handleSend = () => {
-    void chat.handleSend(upload.attachmentIds).then(() => {
-      upload.clearAttachments()
-      setShowUpload(false)
-    })
+    const ids = upload.attachmentIds.slice() // 先快照 ID，防止清除后丢失
+    upload.clearAttachments()               // ✅ 立即清空附件
+    setShowUpload(false)                    // ✅ 立即收起附件区
+    void chat.handleSend(ids)               // 异步发送，不再等它
   }
 
   const handleToggleUpload = () => {
