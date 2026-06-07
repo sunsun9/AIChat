@@ -96,11 +96,13 @@ export default function ChatWindow() {
   if (!activeConversation || messages.length === 0) return <EmptyState />
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-      {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
-      ))}
-      <div ref={bottomRef} />
+    <div className="flex-1 overflow-y-auto py-6">
+      <div className="mx-auto w-full px-6 space-y-5" style={{ maxWidth: '720px' }}>
+        {messages.map((msg) => (
+          <MessageBubble key={msg.id} message={msg} />
+        ))}
+        <div ref={bottomRef} />
+      </div>
     </div>
   )
 }

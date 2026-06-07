@@ -24,29 +24,32 @@ export default function ChatPage() {
       <main className="flex-1 flex flex-col min-w-0 h-full">
         {/* Top bar */}
         <header
-          className="flex items-center gap-3 px-4 py-3.5 border-b backdrop-blur-sm flex-shrink-0"
+          className="flex items-center gap-2 px-4 py-3 border-b backdrop-blur-sm flex-shrink-0"
           style={{
             background: 'var(--header-bg)',
             borderColor: 'var(--bg-border)',
+            minHeight: '52px',
           }}
         >
-          {/* 顶栏内的收起/展开按钮（辅助入口，在 sidebar 完全收起时更易触及） */}
-          <button
-            onClick={() => setSidebarCollapsed((v) => !v)}
-            title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-            className="flex-shrink-0 p-1.5 rounded-lg transition-all duration-150"
-            style={{ color: 'var(--text-faint)' }}
-            onMouseEnter={(e) => {
-              ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-main)'
-              ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-raised)'
-            }}
-            onMouseLeave={(e) => {
-              ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-faint)'
-              ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
-            }}
-          >
-            <PanelLeft size={16} />
-          </button>
+          {/* 展开按钮：仅在收起时显示 */}
+          {sidebarCollapsed && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              title="展开侧边栏"
+              className="flex-shrink-0 p-1.5 rounded-lg transition-all duration-150"
+              style={{ color: 'var(--text-faint)' }}
+              onMouseEnter={(e) => {
+                ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-main)'
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-raised)'
+              }}
+              onMouseLeave={(e) => {
+                ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-faint)'
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+              }}
+            >
+              <PanelLeft size={16} />
+            </button>
+          )}
 
           <div className="flex-1 min-w-0">
             {title ? (
