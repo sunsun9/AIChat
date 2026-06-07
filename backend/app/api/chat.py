@@ -7,12 +7,18 @@ chat.py — 聊天 API
   3. 并发获取：滑动窗口短期历史 + RAG 长期记忆
   4. SSE 流式推送
   5. 完成后异步触发自动摘要（不阻塞响应）
+
+错误处理改动：
+  - LLM 超时、空响应、不可用分类推送到前端 SSE error 事件
+  - 流式生成器内部异常不会导致静默失败，统一 yield error 事件并清理 DB
+  - 保留 assistant_msg 占位行的 finally 清理逻辑，避免脏数据
 """
 
 import asyncio
 import json
+import logging
 from typing import List, AsyncGenerator
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -25,10 +31,16 @@ from app.models.models import (
 from app.schemas.schemas import (
     ChatRequest, ConversationOut, FileAttachmentInfo, MessageOut
 )
-from app.services.llm_service import ask_llm_stream
+from app.services.llm_service import (
+    ask_llm_stream,
+    LLMTimeoutError,
+    LLMUnavailableError,
+    LLMEmptyResponseError,
+)
 from app.services.file_service import read_attachment_content, get_attachment_or_404
 from app.services import memory_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["Chat / Q&A"])
 
 
@@ -53,6 +65,14 @@ async def _stream_ask(
     """
     SSE 生成器：
       metadata → delta × N → done
+
+    异常处理层级：
+      LLMTimeoutError      → error 事件（超时提示）
+      LLMEmptyResponseError → error 事件（空响应提示）
+      LLMUnavailableError  → error 事件（服务不可用提示）
+      其他 Exception       → error 事件（兜底）
+
+    出错时统一删除本次 assistant_msg 占位行，保持 DB 一致性。
     """
     # ── 1. 保存用户消息 ──
     user_msg = Message(
@@ -84,12 +104,13 @@ async def _stream_ask(
             FileAttachmentInfo.model_validate(a).model_dump(mode="json")
             for a in used_attachments
         ],
-        # 告知前端是否激活了长期记忆（可用于 UI 提示）
         "memory_active": len(long_memories) > 0,
     })
 
     # ── 3. 流式 delta ──
     full_answer: list[str] = []
+    llm_error: str | None = None
+
     try:
         async for chunk in ask_llm_stream(
             history=short_history,
@@ -99,13 +120,49 @@ async def _stream_ask(
         ):
             full_answer.append(chunk)
             yield _sse_event("delta", {"text": chunk})
+
+    except LLMTimeoutError as exc:
+        llm_error = f"AI 响应超时，请稍后重试。（{exc}）"
+        logger.warning("LLMTimeoutError in stream: %s", exc)
+
+    except LLMEmptyResponseError as exc:
+        llm_error = "AI 未返回任何内容，请重试或换一种提问方式。"
+        logger.warning("LLMEmptyResponseError in stream: %s", exc)
+
+    except LLMUnavailableError as exc:
+        llm_error = f"AI 服务暂时不可用，请稍后重试。（{exc}）"
+        logger.error("LLMUnavailableError in stream: %s", exc)
+
+    except asyncio.CancelledError:
+        # 客户端断开连接，静默退出，清理 DB
+        llm_error = "_cancelled_"
+        logger.info("SSE stream cancelled by client (conv=%s)", conv.id)
+
     except Exception as exc:
-        yield _sse_event("error", {"msg": f"LLM 服务异常：{str(exc)}"})
-        db.delete(assistant_msg)
-        db.commit()
+        llm_error = f"AI 服务异常，请稍后重试。（{type(exc).__name__}）"
+        logger.exception("Unexpected error in _stream_ask (conv=%s): %s", conv.id, exc)
+
+    # ── 4. 出错处理：推送 error 事件 + 回滚 DB ──
+    if llm_error is not None and llm_error != "_cancelled_":
+        yield _sse_event("error", {"msg": llm_error})
+        # 删除空的 assistant 占位，保持 DB 整洁
+        try:
+            db.delete(assistant_msg)
+            db.commit()
+        except Exception:
+            pass
         return
 
-    # ── 4. 写回完整回复 ──
+    if llm_error == "_cancelled_":
+        # 客户端断开：静默清理
+        try:
+            db.delete(assistant_msg)
+            db.commit()
+        except Exception:
+            pass
+        return
+
+    # ── 5. 写回完整回复 ──
     answer_text = "".join(full_answer)
     assistant_msg.content = answer_text
     db.add(assistant_msg)
@@ -117,7 +174,7 @@ async def _stream_ask(
         "conversation_id": conv.id,
     })
 
-    # ── 5. 后台触发自动摘要（不阻塞流）──
+    # ── 6. 后台触发自动摘要（不阻塞流）──
     asyncio.create_task(
         memory_service.maybe_summarize(
             user_id=conv.user_id,
@@ -169,12 +226,20 @@ async def ask(
             used_attachments.append(att)
 
     # ── 3. 并发获取短期历史 + 长期记忆 ──
-    short_history, long_memories = await memory_service.get_full_context(
-        user_id=current_user.id,
-        conversation_id=conv.id,
-        question=payload.question,
-        db=db,
-    )
+    # 设置超时保护，防止 RAG 检索慢时阻塞整个请求
+    try:
+        short_history, long_memories = await asyncio.wait_for(
+            memory_service.get_full_context(
+                user_id=current_user.id,
+                conversation_id=conv.id,
+                question=payload.question,
+                db=db,
+            ),
+            timeout=10,  # 最多等 10 秒
+        )
+    except asyncio.TimeoutError:
+        logger.warning("get_full_context timeout for conv=%s, using empty context", conv.id)
+        short_history, long_memories = [], []
 
     # ── 4. 返回 SSE 流 ──
     return StreamingResponse(

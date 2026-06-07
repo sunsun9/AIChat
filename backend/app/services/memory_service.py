@@ -10,6 +10,11 @@ memory_service.py — 双层记忆系统
   - DashScope text-embedding-v1 做向量化（与 Qwen 同一供应商，中文效果好）
   - 触发时机：会话消息数每达到 SUMMARIZE_THRESHOLD 的倍数时，自动对旧消息摘要并入库
   - 检索时机：每次提问前，语义检索 Top-K 相关记忆注入 system prompt
+
+错误处理改动：
+  - get_embedding 增加 asyncio.wait_for 超时（10s）
+  - maybe_summarize 捕获 LLMTimeoutError/LLMUnavailableError 并记录日志
+  - get_full_context 内部 retrieve_memories 超时已由调用方（chat.py）保护
 """
 
 from __future__ import annotations
@@ -25,31 +30,26 @@ from app.models.models import Message, MemorySummary
 
 logger = logging.getLogger(__name__)
 
+# embedding 单次请求超时（秒）
+EMBEDDING_TIMEOUT = 10
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Token 估算（无需 tiktoken，基于字符特征快速计算）
 # ═══════════════════════════════════════════════════════════════════════
 
 def estimate_tokens(text: str) -> int:
-    """
-    快速估算 token 数。
-    - 中文字符：约 1.5 字符 / token（汉字较密集）
-    - 英文字符：约 4 字符 / token
-    - 混合按比例加权
-    """
     if not text:
         return 0
     total = len(text)
     cn = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
     en = total - cn
-    return int(cn / 1.5 + en / 4.0) + 4   # +4 为 role/格式开销
+    return int(cn / 1.5 + en / 4.0) + 4
 
 
 def _truncate_to_tokens(text: str, max_tokens: int) -> str:
-    """将文本截断到大致 max_tokens 以内。"""
     if estimate_tokens(text) <= max_tokens:
         return text
-    # 粗略按比例截取，再微调
     ratio = max_tokens / estimate_tokens(text)
     cut = int(len(text) * ratio * 0.9)
     while estimate_tokens(text[:cut]) > max_tokens and cut > 0:
@@ -65,21 +65,13 @@ def build_sliding_window(
     messages: List[Message],
     max_tokens: int = settings.MEMORY_SHORT_TERM_MAX_TOKENS,
 ) -> List[dict]:
-    """
-    从最新到最旧扫描消息，将能放入 token 预算的消息放入滑动窗口。
-
-    返回格式：[{"role": "user"|"assistant", "content": str}, ...]
-    保证至少保留最近 2 条（1 问 1 答），防止历史为空。
-    """
     window: List[Message] = []
     used = 0
 
     for msg in reversed(messages):
-        # 每条消息最多贡献 MEMORY_MSG_MAX_TOKENS token，超长消息截断
         content = _truncate_to_tokens(msg.content, settings.MEMORY_MSG_MAX_TOKENS)
         cost = estimate_tokens(content)
 
-        # 超出预算：如果已有 ≥2 条则停止，否则强制放入（至少保留 1 轮对话）
         if used + cost > max_tokens and len(window) >= 2:
             break
 
@@ -96,7 +88,7 @@ def build_sliding_window(
 # 3. DashScope 向量化（调用 OpenAI 兼容接口）
 # ═══════════════════════════════════════════════════════════════════════
 
-_embed_client: Optional[object] = None   # AsyncOpenAI instance
+_embed_client: Optional[object] = None
 
 
 def _get_embed_client():
@@ -115,19 +107,24 @@ def _get_embed_client():
 async def get_embedding(text: str) -> Optional[List[float]]:
     """
     调用 DashScope text-embedding-v1 返回向量。
-    失败时返回 None（长期记忆降级：跳过该操作）。
+    失败或超时时返回 None（长期记忆降级：跳过该操作）。
     """
     client = _get_embed_client()
     if client is None:
         return None
     try:
-        # 限制输入长度（DashScope 单次最大 2048 token）
         text = _truncate_to_tokens(text, 1800)
-        resp = await client.embeddings.create(
-            model="text-embedding-v1",
-            input=text,
+        resp = await asyncio.wait_for(
+            client.embeddings.create(
+                model="text-embedding-v1",
+                input=text,
+            ),
+            timeout=EMBEDDING_TIMEOUT,
         )
         return resp.data[0].embedding
+    except asyncio.TimeoutError:
+        logger.warning("get_embedding timed out after %ds", EMBEDDING_TIMEOUT)
+        return None
     except Exception as e:
         logger.warning("get_embedding failed: %s", e)
         return None
@@ -137,7 +134,7 @@ async def get_embedding(text: str) -> Optional[List[float]]:
 # 4. ChromaDB 集合（懒加载，向量由 DashScope 提供）
 # ═══════════════════════════════════════════════════════════════════════
 
-_chroma_collection: Optional[object] = None   # chromadb.Collection
+_chroma_collection: Optional[object] = None
 
 
 def get_chroma_collection():
@@ -147,7 +144,6 @@ def get_chroma_collection():
     try:
         import chromadb
         client = chromadb.PersistentClient(path=settings.MEMORY_VECTOR_DB_PATH)
-        # embedding_function=None：我们自己提供向量，不使用内置模型
         _chroma_collection = client.get_or_create_collection(
             name="user_memories",
             metadata={"hnsw:space": "cosine"},
@@ -176,10 +172,6 @@ async def store_memory(
     last_message_id: int,
     db: Session,
 ) -> bool:
-    """
-    将摘要文本向量化后存入 ChromaDB，并在 SQLite 中记录摘要元信息。
-    返回 True 表示成功，False 表示跳过（API 未配置或失败）。
-    """
     collection = get_chroma_collection()
     if collection is None:
         return False
@@ -188,7 +180,6 @@ async def store_memory(
     if embedding is None:
         return False
 
-    # 先写 SQLite 拿到自增 ID，再以 ID 作为 ChromaDB document ID
     try:
         summary_record = MemorySummary(
             user_id=user_id,
@@ -236,7 +227,6 @@ async def retrieve_memories(
     if collection is None:
         return []
 
-    # 无记录时直接跳过，避免 ChromaDB 报错
     try:
         count = collection.count()
         if count == 0:
@@ -258,7 +248,6 @@ async def retrieve_memories(
         docs: List[str] = results.get("documents", [[]])[0]
         distances: List[float] = results.get("distances", [[]])[0]
 
-        # 余弦距离 > 0.6 则认为不相关，过滤掉（距离越小越相似）
         relevant = [
             doc for doc, dist in zip(docs, distances)
             if doc and dist < 0.6
@@ -283,16 +272,16 @@ async def maybe_summarize(
     - 每当真实消息数达到 SUMMARIZE_THRESHOLD 的整数倍时触发
     - 仅对尚未摘要的消息段落操作（通过 last_message_id 判断）
     - 使用独立 DB Session（后台任务中不复用请求 Session）
-
-    db_factory: callable → Session（传入 SessionLocal）
+    - LLM 超时/不可用时记录警告并跳过，不影响主流程
     """
+    from app.services.llm_service import ask_llm, LLMTimeoutError, LLMUnavailableError
+
     threshold = settings.MEMORY_SUMMARIZE_THRESHOLD
     if threshold <= 0:
         return
 
     db: Session = db_factory()
     try:
-        # 获取该会话的有效消息（排除占位符）
         messages: List[Message] = (
             db.query(Message)
             .filter(
@@ -308,7 +297,6 @@ async def maybe_summarize(
         if total < threshold:
             return
 
-        # 已摘要到哪条消息
         last_summary = (
             db.query(MemorySummary)
             .filter(MemorySummary.conversation_id == conversation_id)
@@ -317,18 +305,13 @@ async def maybe_summarize(
         )
         last_summarized_id = last_summary.last_message_id if last_summary else 0
 
-        # 找出尚未摘要的消息
         unsummarized = [m for m in messages if m.id > last_summarized_id]
-
-        # 只有未摘要消息数超过 threshold 时才触发
         if len(unsummarized) < threshold:
             return
 
-        # 取前 threshold 条进行摘要
         to_summarize = unsummarized[:threshold]
         last_msg_id = to_summarize[-1].id
 
-        # 构造摘要 prompt
         history_text = "\n".join(
             f"{'用户' if m.role.value == 'user' else 'AI'}: "
             f"{_truncate_to_tokens(m.content, 300)}"
@@ -339,19 +322,22 @@ async def maybe_summarize(
             f"{history_text}"
         )
 
-        # 调用 LLM 生成摘要
-        from app.services.llm_service import ask_llm
         try:
             summary = await ask_llm(
                 history=[],
                 question=summary_prompt,
                 max_tokens=settings.MEMORY_SUMMARY_MAX_TOKENS,
             )
-        except Exception as e:
-            logger.warning("Auto-summarize LLM call failed: %s", e)
+        except LLMTimeoutError as exc:
+            logger.warning("Auto-summarize skipped (timeout) for conv=%s: %s", conversation_id, exc)
+            return
+        except LLMUnavailableError as exc:
+            logger.warning("Auto-summarize skipped (unavailable) for conv=%s: %s", conversation_id, exc)
+            return
+        except Exception as exc:
+            logger.warning("Auto-summarize LLM call failed for conv=%s: %s", conversation_id, exc)
             return
 
-        # 存储摘要
         await store_memory(user_id, conversation_id, summary, last_msg_id, db)
         logger.info(
             "Auto-summarized conv=%s, messages %s..%s",
@@ -380,8 +366,8 @@ async def get_full_context(
       - long_memories: 语义检索到的长期记忆摘要（List[str]）
 
     两者并发执行以降低延迟。
+    整体超时由调用方（chat.py asyncio.wait_for）兜底。
     """
-    # 从 DB 取有效消息
     messages: List[Message] = (
         db.query(Message)
         .filter(
@@ -393,9 +379,7 @@ async def get_full_context(
         .all()
     )
 
-    # 并发：滑动窗口（纯内存，瞬时）+ RAG 检索（网络 I/O）
     window = build_sliding_window(messages)
-
     memories = await retrieve_memories(user_id, question)
 
     return window, memories
