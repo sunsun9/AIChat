@@ -5,12 +5,19 @@ import { Bot, MessageSquare } from 'lucide-react'
 import type { Message, StreamingMessage, OptimisticMessage } from '@/types'
 
 const SUGGESTED_PROMPTS = [
-  '✦ 解释量子纠缠的原理',
-  '✦ 帮我优化这段 Python 代码',
-  '✦ 写一篇关于AI的短文',
+  '解释量子纠缠的原理',
+  '帮我优化这段 Python 代码',
+  '写一篇关于AI的短文',
 ]
 
 function EmptyState() {
+  const { sendMessage, sending } = useChatStore()
+
+  const handlePromptClick = (text: string) => {
+    if (sending) return
+    void sendMessage({ question: text })
+  }
+
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center space-y-4 animate-fade-up max-w-sm px-6">
@@ -33,18 +40,67 @@ function EmptyState() {
           </p>
         </div>
         <div className="grid grid-cols-1 gap-2 text-left">
-          {SUGGESTED_PROMPTS.map((tip) => (
-            <div
-              key={tip}
-              className="px-3 py-2 rounded-lg text-xs font-mono"
+          {SUGGESTED_PROMPTS.map((prompt) => (
+            <button
+              key={prompt}
+              onClick={() => handlePromptClick(prompt)}
+              disabled={sending}
+              className="w-full px-4 py-3 rounded-xl text-left transition-all duration-200 active:scale-[0.97]"
               style={{
                 background: 'var(--bg-raised)',
                 border: '1px solid var(--bg-border)',
                 color: 'var(--text-soft)',
+                cursor: sending ? 'not-allowed' : 'pointer',
+                outline: 'none',
+              }}
+              onMouseEnter={(e) => {
+                if (sending) return
+                const el = e.currentTarget
+                el.style.background = 'var(--accent-dim)'
+                el.style.borderColor = 'color-mix(in srgb, var(--accent) 45%, transparent)'
+                el.style.color = 'var(--text-main)'
+                el.style.boxShadow = '0 2px 14px var(--accent-dim)'
+                // show arrow
+                const arrow = el.querySelector<HTMLSpanElement>('[data-arrow]')
+                if (arrow) arrow.style.opacity = '1'
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget
+                el.style.background = 'var(--bg-raised)'
+                el.style.borderColor = 'var(--bg-border)'
+                el.style.color = 'var(--text-soft)'
+                el.style.boxShadow = 'none'
+                const arrow = el.querySelector<HTMLSpanElement>('[data-arrow]')
+                if (arrow) arrow.style.opacity = '0'
+              }}
+              onFocus={(e) => {
+                const el = e.currentTarget
+                el.style.borderColor = 'color-mix(in srgb, var(--accent) 55%, transparent)'
+                el.style.boxShadow = '0 0 0 3px var(--input-focus)'
+              }}
+              onBlur={(e) => {
+                const el = e.currentTarget
+                el.style.borderColor = 'var(--bg-border)'
+                el.style.boxShadow = 'none'
               }}
             >
-              {tip}
-            </div>
+              <span className="flex items-center gap-2">
+                <span
+                  className="flex-shrink-0 text-xs"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  ✦
+                </span>
+                <span className="flex-1 font-mono text-xs truncate">{prompt}</span>
+                <span
+                  data-arrow=""
+                  className="flex-shrink-0 text-xs transition-opacity duration-150"
+                  style={{ color: 'var(--accent)', opacity: 0 }}
+                >
+                  →
+                </span>
+              </span>
+            </button>
           ))}
         </div>
       </div>

@@ -2,8 +2,7 @@ import { useEffect } from 'react'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore, selectIsPremium } from '@/store/authStore'
 import { useConversationDelete } from '@/hooks/useConversationDelete'
-import { Plus, MessageSquare, Trash2, LogOut, Zap, User, PanelLeftClose, PanelLeft } from 'lucide-react'
-import clsx from 'clsx'
+import { Plus, MessageSquare, Trash2, LogOut, Zap, User, PanelLeftClose } from 'lucide-react'
 
 interface SidebarProps {
   isCollapsed: boolean

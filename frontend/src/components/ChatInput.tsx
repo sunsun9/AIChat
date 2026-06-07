@@ -5,7 +5,6 @@ import { useChat } from '@/hooks/useChat'
 import { useFileUpload } from '@/hooks/useFileUpload'
 import FileUploadZone from './FileUploadZone'
 import { Send, Paperclip, X, Square } from 'lucide-react'
-import clsx from 'clsx'
 
 export default function ChatInput() {
   const activeId = useChatStore((s) => s.activeId)
