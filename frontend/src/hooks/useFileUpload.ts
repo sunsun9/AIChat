@@ -1,9 +1,19 @@
 import { useState, useRef, useCallback } from 'react'
 import { validateFile, uploadFile, extractUploadError } from '@/services/uploadService'
+import { uploadApi } from '@/api'
 import type { Attachment } from '@/types'
 
 interface UseFileUploadOptions {
   activeConversationId: number | null
+}
+
+/** 静默调用服务端删除接口，失败只记日志不影响 UI */
+async function deleteOnServer(id: number) {
+  try {
+    await uploadApi.deleteAttachment(id)
+  } catch (err) {
+    console.error('[useFileUpload] 删除附件失败, id=', id, err)
+  }
 }
 
 export function useFileUpload({ activeConversationId }: UseFileUploadOptions) {
@@ -47,10 +57,24 @@ export function useFileUpload({ activeConversationId }: UseFileUploadOptions) {
     void processFile(e.dataTransfer.files[0])
   }
 
+  /** 点击附件 × 时：立即从 UI 移除，同时通知服务端删除 */
   function removeAttachment(id: number) {
     setAttachments((prev) => prev.filter((a) => a.id !== id))
+    void deleteOnServer(id)
   }
 
+  /**
+   * 主动放弃所有待发附件（折叠面板 / 切换会话时调用）。
+   * 立即清空 UI，同时批量通知服务端删除，避免孤儿文件残留。
+   */
+  const discardAllAttachments = useCallback(() => {
+    setAttachments((prev) => {
+      prev.forEach((a) => void deleteOnServer(a.id))
+      return []
+    })
+  }, [])
+
+  /** 发送成功后调用：仅清空本地状态，不删服务端（服务端已关联到消息） */
   function clearAttachments() {
     setAttachments([])
   }
@@ -71,6 +95,7 @@ export function useFileUpload({ activeConversationId }: UseFileUploadOptions) {
     handleDrop,
     removeAttachment,
     clearAttachments,
+    discardAllAttachments,
     openFilePicker,
   }
 }

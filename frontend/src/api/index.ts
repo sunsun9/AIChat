@@ -54,4 +54,7 @@ export const uploadApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+
+  deleteAttachment: (attachmentId: number): Promise<AxiosResponse<void>> =>
+    httpClient.delete(`/upload/file/${attachmentId}`),
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore, selectIsPremium } from '@/store/authStore'
 import { useChat } from '@/hooks/useChat'
@@ -15,11 +15,29 @@ export default function ChatInput() {
   const chat = useChat()
   const upload = useFileUpload({ activeConversationId: activeId })
 
+  // 切换会话时，丢弃上一个会话已上传但未发送的附件
+  const prevActiveId = useRef(activeId)
+  useEffect(() => {
+    if (prevActiveId.current !== activeId) {
+      upload.discardAllAttachments()
+      setShowUpload(false)
+    }
+    prevActiveId.current = activeId
+  }, [activeId])
+
   const handleSend = () => {
     void chat.handleSend(upload.attachmentIds).then(() => {
       upload.clearAttachments()
       setShowUpload(false)
     })
+  }
+
+  /** 折叠面板时，若有未发送附件则同步删除服务端文件 */
+  const handleToggleUpload = () => {
+    if (showUpload && upload.attachments.length > 0) {
+      upload.discardAllAttachments()
+    }
+    setShowUpload((v) => !v)
   }
 
   return (
@@ -66,7 +84,7 @@ export default function ChatInput() {
         {/* 附件切换按钮 */}
         {isPremium && (
           <button
-            onClick={() => setShowUpload((v) => !v)}
+            onClick={handleToggleUpload}
             title="上传附件"
             className="flex-shrink-0 p-2 rounded-lg transition-all duration-150"
             style={
