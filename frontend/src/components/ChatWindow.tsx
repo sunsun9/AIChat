@@ -149,16 +149,15 @@ export default function ChatWindow() {
     stickToBottom.current = distFromBottom < 80
   }, [])
 
-  // 新增消息（发送或会话切换）→ 强制滚底并重置粘底标志
+  // 新增消息（用户发送 / 切换会话）→ 强制滚底并重置粘底标志
   useEffect(() => {
     stickToBottom.current = true
     scrollToBottom('smooth')
   }, [messages.length])
 
-  // 流式结束 → 强制滚底
+  // 流式结束 → 只有用户仍处于底部时才滚动；不强制覆盖用户已滚走的位置
   useEffect(() => {
-    if (!sending) {
-      stickToBottom.current = true
+    if (!sending && stickToBottom.current) {
       scrollToBottom('smooth')
     }
   }, [sending])

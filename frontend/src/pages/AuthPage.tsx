@@ -180,15 +180,6 @@ export default function AuthPage() {
             )}
           </button>
         </form>
-
-        <p className="text-center text-xs mt-5" style={{ color: 'var(--text-faint)' }}>
-          演示账号：
-          <span className="font-mono" style={{ color: 'var(--text-soft)' }}>normal_user</span>
-          {' '}或{' '}
-          <span className="font-mono" style={{ color: 'var(--accent)' }}>premium_user</span>
-          ，密码均为{' '}
-          <span className="font-mono" style={{ color: 'var(--text-soft)' }}>password123</span>
-        </p>
       </div>
     </div>
   )

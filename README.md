@@ -13,7 +13,6 @@
   - [环境要求](#环境要求)
   - [后端启动](#后端启动)
   - [前端启动](#前端启动)
-- [演示账号](#演示账号)
 - [功能说明](#功能说明)
   - [普通用户](#普通用户)
   - [高级用户](#高级用户-premium)
@@ -205,22 +204,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | `http://localhost:8000/redoc` | ReDoc 风格 API 文档 |
 | `http://localhost:8000/health` | 健康检查端点 |
 
-**第四步（可选）：创建演示账号**
-
-数据库自动建表后，可通过 Swagger (`/docs`) 或 curl 调用注册接口创建账号：
-
-```bash
-# 创建普通用户
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username": "normal_user", "password": "password123", "role": "normal"}'
-
-# 创建高级用户
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username": "premium_user", "password": "password123", "role": "premium"}'
-```
-
 ---
 
 ### 前端启动
@@ -250,16 +233,6 @@ npm run typecheck   # TypeScript 类型检查
 
 ---
 
-## 演示账号
-
-按照上方步骤注册后可使用以下账号：
-
-| 用户名 | 密码 | 角色 | 权限说明 |
-|--------|------|------|----------|
-| `normal_user` | `password123` | 普通用户 | 仅支持文本问答 |
-| `premium_user` | `password123` | 高级用户 | 文本问答 + 上传多格式文件 |
-
----
 
 ## 功能说明
 
