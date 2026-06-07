@@ -32,7 +32,6 @@ export default function ChatInput() {
     })
   }
 
-  /** 折叠面板时，若有未发送附件则同步删除服务端文件 */
   const handleToggleUpload = () => {
     if (showUpload && upload.attachments.length > 0) {
       upload.discardAllAttachments()
@@ -153,7 +152,7 @@ export default function ChatInput() {
 
       <p className="text-[10px] text-center font-mono" style={{ color: 'var(--text-faint)' }}>
         {isPremium
-          ? '⚡ 高级用户 · 支持文本 + .txt 附件问答'
+          ? '⚡ 高级用户 · 支持文本 + txt / md / pdf / 图片附件问答'
           : '文本问答模式 · 升级为高级用户可上传附件'}
       </p>
     </div>

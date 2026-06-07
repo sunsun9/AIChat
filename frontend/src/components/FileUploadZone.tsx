@@ -1,4 +1,4 @@
-import { Paperclip, X, FileText, FileType, ImageIcon, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Paperclip, X, FileText, FileType, ImageIcon, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { getFileCategory } from '@/services/uploadService'
 import type { Attachment } from '@/types'
 
@@ -16,8 +16,9 @@ interface FileUploadZoneProps {
 /** 根据文件名返回对应图标 */
 function AttachmentIcon({ filename }: { filename: string }) {
   const cat = getFileCategory(filename)
-  if (cat === 'pdf')   return <FileType size={10} />
-  if (cat === 'image') return <ImageIcon size={10} />
+  if (cat === 'pdf')      return <FileType size={10} />
+  if (cat === 'image')    return <ImageIcon size={10} />
+  if (cat === 'markdown') return <BookOpen size={10} />
   return <FileText size={10} />
 }
 
@@ -40,11 +41,11 @@ export default function FileUploadZone({
           cursor: uploading ? 'wait' : 'pointer',
         }}
       >
-        {/* 支持 txt / pdf / 常见图片格式 */}
+        {/* 支持 txt / md / pdf / 常见图片格式 */}
         <input
           ref={fileInputRef}
           type="file"
-          accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp"
+          accept=".txt,.md,.pdf,.jpg,.jpeg,.png,.gif,.webp"
           className="hidden"
           onChange={onInputChange}
         />
@@ -60,7 +61,7 @@ export default function FileUploadZone({
           )}
         </div>
         <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>
-          {uploading ? '上传中...' : '点击或拖拽上传 · txt / pdf / 图片'}
+          {uploading ? '上传中...' : '点击或拖拽上传 · txt / md / pdf / 图片'}
         </span>
       </div>
 

@@ -1,10 +1,22 @@
+"""
+chat.py — 聊天 API
+
+流程（ask 接口）：
+  1. 解析/创建会话
+  2. 验证附件权限
+  3. 并发获取：滑动窗口短期历史 + RAG 长期记忆
+  4. SSE 流式推送
+  5. 完成后异步触发自动摘要（不阻塞响应）
+"""
+
+import asyncio
 import json
 from typing import List, AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user
 from app.core.response import ok
 from app.models.models import (
@@ -15,33 +27,34 @@ from app.schemas.schemas import (
 )
 from app.services.llm_service import ask_llm_stream
 from app.services.file_service import read_attachment_content, get_attachment_or_404
+from app.services import memory_service
 
 router = APIRouter(prefix="/chat", tags=["Chat / Q&A"])
 
 
-# ─────────────────────────── SSE 工具函数 ────────────────────────────
+# ─────────────────────────── SSE 工具 ───────────────────────────────
 
 def _sse_event(event: str, data: str | dict) -> str:
-    """格式化单条 SSE 消息。"""
     payload = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
     return f"event: {event}\ndata: {payload}\n\n"
 
 
+# ─────────────────────────── 核心流式生成器 ─────────────────────────
+
 async def _stream_ask(
     conv: Conversation,
     payload: ChatRequest,
-    history: list,
+    short_history: list,
+    long_memories: list,
     file_contents: list,
     used_attachments: list[FileAttachment],
     db: Session,
 ) -> AsyncGenerator[str, None]:
     """
-    核心流式生成器：
-      1. 先 yield metadata（conversation_id、message_id 占位）
-      2. 逐 token yield delta
-      3. 全部完成后保存 DB，yield done 事件
+    SSE 生成器：
+      metadata → delta × N → done
     """
-    # ── 1. 先保存用户消息，拿到 conv_id ──
+    # ── 1. 保存用户消息 ──
     user_msg = Message(
         conversation_id=conv.id,
         role=MessageRole.USER,
@@ -53,7 +66,7 @@ async def _stream_ask(
     for att in used_attachments:
         att.message_id = user_msg.id
 
-    # 创建 AI 消息占位（content 后面再更新）
+    # 创建 AI 消息占位
     assistant_msg = Message(
         conversation_id=conv.id,
         role=MessageRole.ASSISTANT,
@@ -63,7 +76,7 @@ async def _stream_ask(
     db.flush()
     db.commit()
 
-    # ── 2. 发送 metadata 事件（前端靠此切换到正确 conversation）──
+    # ── 2. metadata 事件 ──
     yield _sse_event("metadata", {
         "conversation_id": conv.id,
         "message_id": assistant_msg.id,
@@ -71,27 +84,28 @@ async def _stream_ask(
             FileAttachmentInfo.model_validate(a).model_dump(mode="json")
             for a in used_attachments
         ],
+        # 告知前端是否激活了长期记忆（可用于 UI 提示）
+        "memory_active": len(long_memories) > 0,
     })
 
-    # ── 3. 逐 token 流式输出 ──
+    # ── 3. 流式 delta ──
     full_answer: list[str] = []
     try:
         async for chunk in ask_llm_stream(
-            history=history,
+            history=short_history,
             question=payload.question,
             file_contents=file_contents or None,
+            long_term_memories=long_memories or None,
         ):
             full_answer.append(chunk)
             yield _sse_event("delta", {"text": chunk})
     except Exception as exc:
-        # 出错时通知前端
         yield _sse_event("error", {"msg": f"LLM 服务异常：{str(exc)}"})
-        # 清理空的 assistant_msg
         db.delete(assistant_msg)
         db.commit()
         return
 
-    # ── 4. 拼接完整回复，写回数据库 ──
+    # ── 4. 写回完整回复 ──
     answer_text = "".join(full_answer)
     assistant_msg.content = answer_text
     db.add(assistant_msg)
@@ -103,6 +117,15 @@ async def _stream_ask(
         "conversation_id": conv.id,
     })
 
+    # ── 5. 后台触发自动摘要（不阻塞流）──
+    asyncio.create_task(
+        memory_service.maybe_summarize(
+            user_id=conv.user_id,
+            conversation_id=conv.id,
+            db_factory=SessionLocal,
+        )
+    )
+
 
 # ─────────────────────────── Ask（流式 SSE）─────────────────────────
 
@@ -112,19 +135,16 @@ async def ask(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """提交问题，以 SSE 流式返回 AI 回答。"""
+    """提交问题，以 SSE 流式返回 AI 回答。集成短期滑动窗口 + 长期 RAG 记忆。"""
 
-    # ── 1. 解析或创建会话 ────
+    # ── 1. 解析或创建会话 ──
     if payload.conversation_id:
         conv = db.query(Conversation).filter(
             Conversation.id == payload.conversation_id,
             Conversation.user_id == current_user.id,
         ).first()
         if not conv:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="会话不存在",
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
     else:
         title = payload.question[:40] + ("…" if len(payload.question) > 40 else "")
         conv = Conversation(user_id=current_user.id, title=title)
@@ -132,7 +152,7 @@ async def ask(
         db.flush()
         db.commit()
 
-    # ── 2. 处理附件（仅 premium 用户）──
+    # ── 2. 附件处理（仅 premium）──
     file_contents: List[dict] = []
     used_attachments: List[FileAttachment] = []
 
@@ -144,34 +164,26 @@ async def ask(
             )
         for att_id in payload.attachment_ids:
             att = get_attachment_or_404(att_id, current_user.id, db)
-            content = read_attachment_content(att)
-            file_contents.append({"filename": att.original_filename, "content": content})
+            fc = read_attachment_content(att)
+            file_contents.append(fc)
             used_attachments.append(att)
 
-    # ── 3. 构建历史消息上下文 ───
-    prior_messages = (
-        db.query(Message)
-        .filter(
-            Message.conversation_id == conv.id,
-            Message.content != "[file upload placeholder]",
-            Message.content != "",  # 过滤掉流式占位
-        )
-        .order_by(Message.created_at)
-        .limit(20)
-        .all()
+    # ── 3. 并发获取短期历史 + 长期记忆 ──
+    short_history, long_memories = await memory_service.get_full_context(
+        user_id=current_user.id,
+        conversation_id=conv.id,
+        question=payload.question,
+        db=db,
     )
-    history = [
-        {"role": msg.role.value, "content": msg.content}
-        for msg in prior_messages
-    ]
 
     # ── 4. 返回 SSE 流 ──
     return StreamingResponse(
-        _stream_ask(conv, payload, history, file_contents, used_attachments, db),
+        _stream_ask(conv, payload, short_history, long_memories,
+                    file_contents, used_attachments, db),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",   # 关闭 Nginx 缓冲
+            "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
         },
     )

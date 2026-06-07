@@ -2,23 +2,24 @@
  * services/uploadService.ts
  *
  * 文件校验规则与上传编排逻辑。
- * 支持 .txt / .pdf / 图片（.jpg .jpeg .png .gif .webp）
+ * 支持 .txt / .md / .pdf / 图片（.jpg .jpeg .png .gif .webp）
  */
 import axios from 'axios'
 import { uploadApi } from '@/api'
 import type { Attachment, ApiError } from '@/types'
 
 // ── 校验规则 ───
-const ALLOWED_EXTENSIONS = ['.txt', '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp']
+const ALLOWED_EXTENSIONS = ['.txt', '.md', '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp']
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 
 /** 文件类型分类（用于 UI 显示图标等） */
-export type FileCategory = 'text' | 'pdf' | 'image'
+export type FileCategory = 'text' | 'markdown' | 'pdf' | 'image'
 
 export function getFileCategory(filename: string): FileCategory {
   const ext = filename.toLowerCase().split('.').pop() ?? ''
   if (ext === 'pdf') return 'pdf'
   if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image'
+  if (ext === 'md') return 'markdown'
   return 'text'
 }
 
