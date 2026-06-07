@@ -4,7 +4,7 @@ import { useAuthStore, selectIsPremium } from '@/store/authStore'
 import { useChat } from '@/hooks/useChat'
 import { useFileUpload } from '@/hooks/useFileUpload'
 import FileUploadZone from './FileUploadZone'
-import { Send, Zap } from 'lucide-react'
+import { Send, Paperclip, X } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function ChatInput() {
@@ -38,6 +38,8 @@ export default function ChatInput() {
     }
     setShowUpload((v) => !v)
   }
+
+  const hasAttachments = upload.attachments.length > 0
 
   return (
     <div
@@ -84,15 +86,36 @@ export default function ChatInput() {
         {isPremium && (
           <button
             onClick={handleToggleUpload}
-            title="上传附件"
-            className="flex-shrink-0 p-2 rounded-lg transition-all duration-150"
+            title={showUpload ? '关闭附件面板' : '上传附件'}
+            className="flex-shrink-0 p-2 rounded-lg transition-all duration-150 relative"
             style={
               showUpload
                 ? { background: 'var(--accent-dim)', color: 'var(--accent)' }
                 : { color: 'var(--text-faint)' }
             }
+            onMouseEnter={(e) => {
+              if (!showUpload) {
+                ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-main)'
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-raised)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!showUpload) {
+                ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-faint)'
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+              }
+            }}
           >
-            <Zap size={16} />
+            {/* 有附件时显示数量角标 */}
+            {hasAttachments && (
+              <span
+                className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                {upload.attachments.length}
+              </span>
+            )}
+            {showUpload ? <X size={16} /> : <Paperclip size={16} />}
           </button>
         )}
 
