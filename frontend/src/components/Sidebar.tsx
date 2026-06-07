@@ -13,8 +13,11 @@ export default function Sidebar() {
 
   const { pendingId, requestDelete } = useConversationDelete(deleteConversation)
 
+  // App.tsx 已在登录后预取，仅在列表为空时补充加载（避免重复请求）
   useEffect(() => {
-    void loadConversations()
+    if (conversations.length === 0) {
+      void loadConversations()
+    }
   }, [])
 
   return (

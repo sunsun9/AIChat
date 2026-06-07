@@ -29,6 +29,7 @@ interface ChatStore {
   loading: boolean
   sending: boolean
   error: string | null
+  _lastConvsLoaded: number  // timestamp，节流防重复请求
 
   loadConversations: () => Promise<void>
   openConversation: (id: number) => Promise<void>
@@ -57,13 +58,17 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   loading: false,
   sending: false,
   error: null,
+  _lastConvsLoaded: 0,
 
   // ── 加载侧边栏列表 ───
   loadConversations: async () => {
+    const { _lastConvsLoaded, loading } = get()
+    // 30 秒内不重复请求（App 预取 + Sidebar 挂载双触发保护）
+    if (loading || Date.now() - _lastConvsLoaded < 30_000) return
     set({ loading: true, error: null })
     try {
       const conversations = await fetchConversations()
-      set({ conversations, loading: false })
+      set({ conversations, loading: false, _lastConvsLoaded: Date.now() })
     } catch (err) {
       set({ error: extractChatError(err), loading: false })
     }
