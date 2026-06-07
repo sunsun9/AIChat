@@ -1,4 +1,7 @@
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Paperclip, Bot, User } from 'lucide-react'
@@ -15,6 +18,19 @@ const codeTheme = {
     margin: 0,
     fontSize: '0.8rem',
   },
+}
+
+/**
+ * 将 AI 常见的 LaTeX 分隔符统一转为 remark-math 识别的格式：
+ *   \[...\]  →  $$...$$   (块级公式)
+ *   \(...\)  →  $...$     (行内公式)
+ */
+function preprocessMath(content: string): string {
+  return content
+    // 块级：\[ ... \]（跨行）
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_m, math) => `\n$$\n${math}\n$$\n`)
+    // 行内：\( ... \)
+    .replace(/\\\((.+?)\\\)/g, (_m, math) => `$${math}$`)
 }
 
 interface CodeBlockProps {
@@ -144,6 +160,8 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
               ) : (
                 <>
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
                     components={{
                       code({ className, children, ...props }) {
                         const isInline = !className
@@ -157,7 +175,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                       },
                     }}
                   >
-                    {message.content}
+                    {preprocessMath(message.content)}
                   </ReactMarkdown>
                   {/* 流式进行中：末尾加光标 */}
                   {isStreaming && <StreamingCursor />}

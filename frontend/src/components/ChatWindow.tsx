@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useChatStore } from '@/store/chatStore'
 import MessageBubble from './MessageBubble'
 import { Bot, MessageSquare } from 'lucide-react'
@@ -60,7 +60,6 @@ function EmptyState() {
                 el.style.borderColor = 'color-mix(in srgb, var(--accent) 45%, transparent)'
                 el.style.color = 'var(--text-main)'
                 el.style.boxShadow = '0 2px 14px var(--accent-dim)'
-                // show arrow
                 const arrow = el.querySelector<HTMLSpanElement>('[data-arrow]')
                 if (arrow) arrow.style.opacity = '1'
               }}
@@ -134,17 +133,41 @@ export default function ChatWindow() {
   const { activeConversation, sending, loading } = useChatStore()
   const messages = useVisibleMessages()
   const bottomRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  // true = 自动跟随底部；用户向上滚动时置 false
+  const stickToBottom = useRef(true)
 
-  // 有新消息或流式内容更新时自动滚到底
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    bottomRef.current?.scrollIntoView({ behavior })
+  }
+
+  // 用户手动滚动时，判断是否仍贴近底部（阈值 80px）
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickToBottom.current = distFromBottom < 80
+  }, [])
+
+  // 新增消息（发送或会话切换）→ 强制滚底并重置粘底标志
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, sending])
+    stickToBottom.current = true
+    scrollToBottom('smooth')
+  }, [messages.length])
 
-  // 流式输出时跟随滚动（依赖最后一条消息内容）
+  // 流式结束 → 强制滚底
+  useEffect(() => {
+    if (!sending) {
+      stickToBottom.current = true
+      scrollToBottom('smooth')
+    }
+  }, [sending])
+
+  // 流式增量更新 → 只有用户未向上滚动时才跟随
   const lastMsgContent = messages[messages.length - 1]?.content ?? ''
   useEffect(() => {
-    if (sending) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (sending && stickToBottom.current) {
+      scrollToBottom('instant')
     }
   }, [lastMsgContent, sending])
 
@@ -152,7 +175,11 @@ export default function ChatWindow() {
   if (!activeConversation || messages.length === 0) return <EmptyState />
 
   return (
-    <div className="flex-1 overflow-y-auto py-6">
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto py-6"
+      onScroll={handleScroll}
+    >
       <div className="mx-auto w-full px-6 space-y-5" style={{ maxWidth: '720px' }}>
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />

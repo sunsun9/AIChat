@@ -248,3 +248,38 @@
   from { background-position: -200% 0; }
   to   { background-position:  200% 0; }
 }
+
+/* ── Markdown 表格 ── */
+.prose-chat table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  font-size: 0.85em;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--bg-border);
+}
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid var(--bg-border);
+  padding: 0.45em 0.85em;
+  text-align: left;
+}
+.prose-chat th {
+  background: var(--bg-raised);
+  font-weight: 600;
+  color: var(--text-main);
+}
+.prose-chat tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg-raised) 50%, transparent);
+}
+
+/* ── KaTeX 公式（防溢出，块级居中） ── */
+.prose-chat .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.4em 0;
+}
+.prose-chat .katex {
+  font-size: 1em;
+}
