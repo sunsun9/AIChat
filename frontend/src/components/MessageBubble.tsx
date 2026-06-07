@@ -65,7 +65,8 @@ function StreamingCursor() {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  const normalized = /Z$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + 'Z'
+  return new Date(normalized).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
 type AnyMessage = Message | StreamingMessage
