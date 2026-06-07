@@ -119,7 +119,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       </div>
 
       {/* 消息气泡 */}
-      <div className={clsx('max-w-[75%] space-y-2', isUser && 'items-end flex flex-col')}>
+      <div className={clsx('max-w-[90%] space-y-2', isUser && 'items-end flex flex-col')}>
         {isUser && message.attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 justify-end">
             {message.attachments.map((a) => (
