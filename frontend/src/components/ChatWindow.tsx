@@ -2,34 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useChatStore } from '@/store/chatStore'
 import MessageBubble from './MessageBubble'
 import { Bot, MessageSquare } from 'lucide-react'
-import type { Message } from '@/types'
-
-function TypingIndicator() {
-  return (
-    <div className="flex gap-3 animate-fade-up">
-      <div
-        className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center"
-        style={{
-          background: 'var(--accent-dim)',
-          border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)',
-          boxShadow: '0 0 12px var(--accent-dim)',
-        }}
-      >
-        <Bot size={13} style={{ color: 'var(--accent)' }} />
-      </div>
-      <div
-        className="px-4 py-3 rounded-2xl rounded-tl-sm"
-        style={{ background: 'var(--bubble-ai-bg)', border: '1px solid var(--bubble-ai-border)' }}
-      >
-        <div className="flex gap-1 items-center h-4">
-          <span className="typing-dot" />
-          <span className="typing-dot" />
-          <span className="typing-dot" />
-        </div>
-      </div>
-    </div>
-  )
-}
+import type { Message, StreamingMessage, OptimisticMessage } from '@/types'
 
 const SUGGESTED_PROMPTS = [
   '✦ 解释量子纠缠的原理',
@@ -82,19 +55,22 @@ function EmptyState() {
 function LoadingState() {
   return (
     <div className="flex-1 flex items-center justify-center">
-      <div className="flex gap-1.5">
-        <span className="typing-dot" />
-        <span className="typing-dot" />
-        <span className="typing-dot" />
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center"
+        style={{ background: 'var(--accent-dim)' }}
+      >
+        <Bot size={16} style={{ color: 'var(--accent)' }} className="animate-pulse" />
       </div>
     </div>
   )
 }
 
-function useVisibleMessages() {
+type AnyMessage = Message | OptimisticMessage | StreamingMessage
+
+function useVisibleMessages(): AnyMessage[] {
   const activeConversation = useChatStore((s) => s.activeConversation)
   return (activeConversation?.messages ?? []).filter(
-    (m): m is Message => m.content !== '[file upload placeholder]',
+    (m): m is AnyMessage => m.content !== '[file upload placeholder]',
   )
 }
 
@@ -103,9 +79,18 @@ export default function ChatWindow() {
   const messages = useVisibleMessages()
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // 有新消息或流式内容更新时自动滚到底
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, sending])
+
+  // 流式输出时跟随滚动（依赖最后一条消息内容）
+  const lastMsgContent = messages[messages.length - 1]?.content ?? ''
+  useEffect(() => {
+    if (sending) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [lastMsgContent, sending])
 
   if (loading && !activeConversation) return <LoadingState />
   if (!activeConversation || messages.length === 0) return <EmptyState />
@@ -115,7 +100,6 @@ export default function ChatWindow() {
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />
       ))}
-      {sending && <TypingIndicator />}
       <div ref={bottomRef} />
     </div>
   )

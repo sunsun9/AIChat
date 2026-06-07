@@ -2,8 +2,7 @@
  * services/chatService.ts
  *
  * 会话与消息相关业务逻辑。
- * 负责乐观消息 ID 的生成、会话列表的局部更新及 API 调用编排。
- * 纯函数，不引入 Zustand。
+ * 支持流式 SSE 响应模式。
  */
 import axios from 'axios'
 import { chatApi } from '@/api'
@@ -16,6 +15,7 @@ import type {
 } from '@/types'
 
 // ── 辅助函数 ────
+
 export function makeOptimisticMessage(question: string): OptimisticMessage {
   return {
     id: `opt-${Date.now()}`,
@@ -30,7 +30,6 @@ export function makeOptimisticMessage(question: string): OptimisticMessage {
 /** 从聊天错误中提取用户友好的提示信息。 */
 export function extractChatError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    // 新统一错误格式：{ code, msg, data: null }
     const msg = (err.response?.data as Partial<ApiError>)?.msg
     return msg ?? '操作失败，请重试'
   }
@@ -40,8 +39,7 @@ export function extractChatError(err: unknown): string {
 
 /**
  * 将会话摘要更新到列表中。
- * 若为新会话则插入到列表头部；
- * 若已存在则更新 message_count 和 updated_at。
+ * 若为新会话则插入到列表头部；若已存在则更新 message_count 和 updated_at。
  */
 export function upsertConversationInList(
   list: ConversationSummary[],
@@ -54,7 +52,6 @@ export function upsertConversationInList(
     updated_at: updated.updated_at,
     message_count: updated.message_count,
   }
-
   const exists = list.some((c) => c.id === updated.id)
   if (exists) {
     return list.map((c) => (c.id === updated.id ? summary : c))
@@ -63,6 +60,7 @@ export function upsertConversationInList(
 }
 
 // ── API 操作 ────
+
 export async function fetchConversations(): Promise<ConversationSummary[]> {
   const { data } = await chatApi.listConversations()
   return data
@@ -73,28 +71,111 @@ export async function fetchConversation(id: number): Promise<ConversationDetail>
   return data
 }
 
-export interface SendResult {
-  conversationId: number
-  conversation: ConversationDetail
+export interface StreamCallbacks {
+  /** 收到 metadata 事件（conversation_id 确定后立即触发） */
+  onMetadata: (meta: { conversation_id: number; message_id: number }) => void
+  /** 收到一个文本 delta */
+  onDelta: (text: string) => void
+  /** 流式完成 */
+  onDone: (meta: { conversation_id: number; message_id: number }) => void
+  /** 出错 */
+  onError: (msg: string) => void
 }
 
 /**
- * 发送消息并返回刷新后的会话数据。
- * 乐观 UI 更新由调用方负责。
+ * 通过 fetch + ReadableStream 消费 SSE 流式聊天接口。
+ * 不使用 EventSource，以便携带 Authorization header。
  */
-export async function sendMessage(
+export async function sendMessageStream(
   activeConversationId: number | null,
   params: SendMessageParams,
-): Promise<SendResult> {
-  const { data: askData } = await chatApi.ask({
-    conversation_id: activeConversationId,
-    question: params.question,
-    attachment_ids: params.attachmentIds ?? [],
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = localStorage.getItem('token')
+
+  const response = await fetch('/api/v1/chat/ask', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      conversation_id: activeConversationId,
+      question: params.question,
+      attachment_ids: params.attachmentIds ?? [],
+    }),
+    signal,
   })
 
-  const conversation = await fetchConversation(askData.conversation_id)
+  if (!response.ok) {
+    // 尝试解析错误体
+    try {
+      const errBody = await response.json()
+      callbacks.onError(errBody?.detail ?? errBody?.msg ?? `请求失败 (${response.status})`)
+    } catch {
+      callbacks.onError(`请求失败 (${response.status})`)
+    }
+    return
+  }
 
-  return { conversationId: askData.conversation_id, conversation }
+  if (!response.body) {
+    callbacks.onError('不支持流式响应')
+    return
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+
+    // SSE 以 "\n\n" 分隔每条消息
+    const parts = buffer.split('\n\n')
+    // 最后一段可能不完整，留在 buffer
+    buffer = parts.pop() ?? ''
+
+    for (const part of parts) {
+      if (!part.trim()) continue
+
+      let eventType = 'message'
+      let dataStr = ''
+
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
+          dataStr = line.slice(6).trim()
+        }
+      }
+
+      if (!dataStr) continue
+
+      try {
+        const payload = JSON.parse(dataStr)
+        switch (eventType) {
+          case 'metadata':
+            callbacks.onMetadata(payload)
+            break
+          case 'delta':
+            callbacks.onDelta(payload.text ?? '')
+            break
+          case 'done':
+            callbacks.onDone(payload)
+            break
+          case 'error':
+            callbacks.onError(payload.msg ?? '未知错误')
+            break
+        }
+      } catch {
+        // 忽略解析失败的 SSE 帧
+      }
+    }
+  }
 }
 
 export async function removeConversation(id: number): Promise<void> {

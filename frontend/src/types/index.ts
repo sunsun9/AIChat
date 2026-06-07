@@ -25,13 +25,12 @@ export interface RegisterPayload {
   role: UserRole
 }
 
-/** 登录响应（拦截器解包 { code, msg, data } 后的业务数据） */
 export interface LoginResponse {
-  token: string   // 后端重构后由 access_token 改名为 token
+  token: string
   user: User
 }
 
-// ── 统一响应包装（供高级用法参考）────
+// ── 统一响应包装 ────
 export interface ApiResponse<T = unknown> {
   code: number
   msg: string
@@ -63,8 +62,17 @@ export interface OptimisticMessage extends Message {
   isOptimistic: true
 }
 
+/** 流式生成中的 AI 消息（尚未完成） */
+export interface StreamingMessage {
+  id: `streaming-${number}`
+  role: 'assistant'
+  content: string       // 累积的文本
+  created_at: string
+  attachments: []
+  isStreaming: true
+}
+
 // ── 会话 ───
-/** 侧边栏列表中展示的会话摘要 */
 export interface ConversationSummary {
   id: number
   title: string
@@ -73,9 +81,8 @@ export interface ConversationSummary {
   message_count: number
 }
 
-/** 打开会话后加载的完整数据（含消息列表） */
 export interface ConversationDetail extends ConversationSummary {
-  messages: (Message | OptimisticMessage)[]
+  messages: (Message | OptimisticMessage | StreamingMessage)[]
 }
 
 // ── 接口请求体 ───
@@ -97,7 +104,7 @@ export interface UploadResponse {
   content_preview: string
 }
 
-// ── 接口错误（新统一格式）───
+// ── 接口错误 ───
 export interface ApiError {
   code: number
   msg: string
