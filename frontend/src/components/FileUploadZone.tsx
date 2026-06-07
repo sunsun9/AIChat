@@ -1,4 +1,5 @@
-import { Paperclip, X, FileText, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Paperclip, X, FileText, FileType, ImageIcon, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { getFileCategory } from '@/services/uploadService'
 import type { Attachment } from '@/types'
 
 interface FileUploadZoneProps {
@@ -10,6 +11,14 @@ interface FileUploadZoneProps {
   onDrop: (e: React.DragEvent) => void
   onRemove: (id: number) => void
   onZoneClick: () => void
+}
+
+/** 根据文件名返回对应图标 */
+function AttachmentIcon({ filename }: { filename: string }) {
+  const cat = getFileCategory(filename)
+  if (cat === 'pdf')   return <FileType size={10} />
+  if (cat === 'image') return <ImageIcon size={10} />
+  return <FileText size={10} />
 }
 
 export default function FileUploadZone({
@@ -31,7 +40,14 @@ export default function FileUploadZone({
           cursor: uploading ? 'wait' : 'pointer',
         }}
       >
-        <input ref={fileInputRef} type="file" accept=".txt" className="hidden" onChange={onInputChange} />
+        {/* 支持 txt / pdf / 常见图片格式 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp"
+          className="hidden"
+          onChange={onInputChange}
+        />
         <div className="flex-shrink-0 transition-colors" style={{ color: uploading ? 'var(--accent)' : 'var(--text-faint)' }}>
           {uploading ? (
             <span className="flex gap-0.5">
@@ -44,7 +60,7 @@ export default function FileUploadZone({
           )}
         </div>
         <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>
-          {uploading ? '上传中...' : '点击或拖拽上传 .txt 文件'}
+          {uploading ? '上传中...' : '点击或拖拽上传 · txt / pdf / 图片'}
         </span>
       </div>
 
@@ -67,7 +83,7 @@ export default function FileUploadZone({
                 color: 'var(--accent)',
               }}
             >
-              <FileText size={10} />
+              <AttachmentIcon filename={att.original_filename} />
               <span className="max-w-[140px] truncate">{att.original_filename}</span>
               <CheckCircle2 size={10} style={{ color: '#10b981' }} />
               <button

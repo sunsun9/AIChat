@@ -2,15 +2,25 @@
  * services/uploadService.ts
  *
  * 文件校验规则与上传编排逻辑。
- * 集中管理规则便于统一修改，保持组件层轻量。
+ * 支持 .txt / .pdf / 图片（.jpg .jpeg .png .gif .webp）
  */
 import axios from 'axios'
 import { uploadApi } from '@/api'
 import type { Attachment, ApiError } from '@/types'
 
 // ── 校验规则 ───
-const ALLOWED_EXTENSIONS = ['.txt']
+const ALLOWED_EXTENSIONS = ['.txt', '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp']
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
+
+/** 文件类型分类（用于 UI 显示图标等） */
+export type FileCategory = 'text' | 'pdf' | 'image'
+
+export function getFileCategory(filename: string): FileCategory {
+  const ext = filename.toLowerCase().split('.').pop() ?? ''
+  if (ext === 'pdf') return 'pdf'
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image'
+  return 'text'
+}
 
 export interface ValidationResult {
   valid: boolean
@@ -22,7 +32,7 @@ export function validateFile(file: File): ValidationResult {
     file.name.toLowerCase().endsWith(ext),
   )
   if (!hasAllowedExtension) {
-    return { valid: false, error: `只支持 ${ALLOWED_EXTENSIONS.join('、')} 格式的文件` }
+    return { valid: false, error: `支持格式：${ALLOWED_EXTENSIONS.join('、')}` }
   }
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return {
@@ -56,7 +66,6 @@ export async function uploadFile(
 /** 从上传错误中提取用户友好的提示信息。 */
 export function extractUploadError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    // 新统一错误格式：{ code, msg, data: null }
     const msg = (err.response?.data as Partial<ApiError>)?.msg
     return msg ?? '上传失败，请重试'
   }

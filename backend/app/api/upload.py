@@ -14,8 +14,8 @@ router = APIRouter(prefix="/upload", tags=["File Upload"])
 
 @router.post("/file")
 async def upload_file(
-    file: UploadFile = File(..., description="TXT file to upload"),
-    conversation_id: Optional[int] = Form(None, description="Existing conversation ID (optional)"),
+    file: UploadFile = File(..., description="支持 .txt / .pdf / .jpg / .jpeg / .png / .gif / .webp"),
+    conversation_id: Optional[int] = Form(None, description="已有会话 ID（可选）"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_premium),
 ):
