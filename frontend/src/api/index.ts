@@ -20,6 +20,14 @@ export const authApi = {
   login: (data: LoginPayload): Promise<AxiosResponse<LoginResponse>> =>
     httpClient.post('/auth/login', data),
 
+  /** 用 refresh token 换取新的 token 对 */
+  refresh: (refreshToken: string): Promise<AxiosResponse<LoginResponse>> =>
+    httpClient.post('/auth/refresh', { refresh_token: refreshToken }),
+
+  /** 退出登录，服务端吊销 refresh token */
+  logout: (refreshToken: string): Promise<AxiosResponse<void>> =>
+    httpClient.post('/auth/logout', { refresh_token: refreshToken }),
+
   me: (): Promise<AxiosResponse<User>> =>
     httpClient.get('/auth/me'),
 }

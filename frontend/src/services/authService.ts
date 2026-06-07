@@ -2,17 +2,18 @@
  * services/authService.ts
  *
  * 认证相关业务逻辑。
- * 负责 token 与用户信息的持久化策略（当前使用 localStorage）。
- * 组件和 store 调用此层，不直接操作底层 API。
+ * 持久化策略：token + refresh_token + user 均存入 localStorage。
  */
 import axios from 'axios'
 import { authApi } from '@/api'
 import type { LoginPayload, RegisterPayload, User, AuthState, ApiError } from '@/types'
 
 const TOKEN_KEY = 'token'
+const REFRESH_TOKEN_KEY = 'refresh_token'
 const USER_KEY = 'user'
 
 // ── 持久化辅助函数 ───
+
 export function loadPersistedAuth(): AuthState {
   try {
     const token = localStorage.getItem(TOKEN_KEY)
@@ -24,27 +25,37 @@ export function loadPersistedAuth(): AuthState {
   }
 }
 
-function persistAuth(user: User, token: string): void {
+function persistAuth(user: User, token: string, refreshToken: string): void {
   localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
   localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
-function clearPersistedAuth(): void {
+export function clearPersistedAuth(): void {
   localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
 }
 
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY)
+}
+
+export function saveNewAccessToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token)
+}
+
 // ── 认证操作 ───
+
 export interface AuthServiceResult {
   user: User
   token: string
 }
 
-/** 登录并持久化凭证，失败时抛出异常。 */
+/** 登录并持久化凭证（access + refresh token），失败时抛出异常。 */
 export async function login(payload: LoginPayload): Promise<AuthServiceResult> {
   const { data } = await authApi.login(payload)
-  // data 已由 httpClient 拦截器解包，直接为 { token, user }
-  persistAuth(data.user, data.token)
+  persistAuth(data.user, data.token, data.refresh_token)
   return { user: data.user, token: data.token }
 }
 
@@ -56,15 +67,23 @@ export async function register(payload: RegisterPayload): Promise<void> {
   await authApi.register(payload)
 }
 
-/** 清除本地所有认证状态。 */
+/**
+ * 退出登录：
+ * 1. 通知服务端吊销 refresh token（best-effort，不等待）
+ * 2. 清除本地所有凭证
+ */
 export function logout(): void {
+  const rt = getRefreshToken()
+  if (rt) {
+    // 不 await：用户体验优先，失败也无妨（token 会自然过期）
+    authApi.logout(rt).catch(() => {})
+  }
   clearPersistedAuth()
 }
 
 /** 从认证错误中提取用户友好的提示信息。 */
 export function extractAuthError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    // 新统一错误格式：{ code, msg, data: null }
     const msg = (err.response?.data as Partial<ApiError>)?.msg
     return msg ?? '请求失败，请重试'
   }

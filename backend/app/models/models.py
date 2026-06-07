@@ -28,9 +28,33 @@ class User(Base):
 
     conversations = relationship("Conversation", back_populates="user",
                                   cascade="all, delete-orphan")
+    refresh_tokens = relationship("RefreshToken", back_populates="user",   # ← 新增
+                                   cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User id={self.id} username={self.username} role={self.role}>"
+
+
+# ── Refresh Token 表（新增）─────────────────────────────────────────────────
+class RefreshToken(Base):
+    """
+    Refresh Token 表。
+    存储 token 的 SHA-256 哈希值（不存明文），防止数据库泄露导致 token 被滥用。
+    每次使用时自动轮转（旧 token 吊销，发放新 token）。
+    """
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)  # SHA-256 hex = 64 chars
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_revoked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="refresh_tokens")
+
+    def __repr__(self):
+        return f"<RefreshToken id={self.id} user_id={self.user_id} revoked={self.is_revoked}>"
 
 
 class Conversation(Base):
@@ -47,7 +71,6 @@ class Conversation(Base):
     user = relationship("User", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation",
                              cascade="all, delete-orphan", order_by="Message.created_at")
-    # 长期记忆摘要（1 对多：一个会话可产生多条摘要）
     memory_summaries = relationship("MemorySummary", back_populates="conversation",
                                      cascade="all, delete-orphan")
 
@@ -99,17 +122,11 @@ class FileAttachment(Base):
 
 
 class MemorySummary(Base):
-    """
-    长期记忆摘要表。
-    记录某会话中已被向量化存储的消息范围，防止重复摘要。
-    ChromaDB 中对应的 document ID 为 f"mem_{id}"。
-    """
     __tablename__ = "memory_summaries"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    # 本次摘要涵盖的最后一条消息 ID（用于判断是否需要再次摘要）
     last_message_id = Column(Integer, nullable=False)
     summary_text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

@@ -27,6 +27,7 @@ export interface RegisterPayload {
 
 export interface LoginResponse {
   token: string
+  refresh_token: string   // ← 新增
   user: User
 }
 
