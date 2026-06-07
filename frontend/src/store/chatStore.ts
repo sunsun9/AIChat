@@ -37,6 +37,8 @@ interface ChatStore {
   sendMessage: (params: SendMessageParams) => Promise<void>
   deleteConversation: (id: number) => Promise<void>
   clearError: () => void
+  /** 切换用户时清空所有聊天状态，同时重置节流时间戳 */
+  resetChat: () => void
 }
 
 /** 生成流式消息占位 */
@@ -238,4 +240,15 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  resetChat: () =>
+    set({
+      conversations: [],
+      activeConversation: null,
+      activeId: null,
+      loading: false,
+      sending: false,
+      error: null,
+      _lastConvsLoaded: 0,   // 重置节流，让新用户登录后能立即拉取自己的数据
+    }),
 }))

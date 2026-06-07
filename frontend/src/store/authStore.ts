@@ -2,6 +2,9 @@ import { create } from 'zustand'
 import { loadPersistedAuth, logout as serviceLogout } from '@/services/authService'
 import type { User } from '@/types'
 
+// 延迟导入避免循环依赖（authStore ← chatStore 均为叶子模块，实际无环）
+import { useChatStore } from '@/store/chatStore'
+
 interface AuthStore {
   user: User | null
   token: string | null
@@ -20,6 +23,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
 
   logout: () => {
     serviceLogout()
+    useChatStore.getState().resetChat()  // ← 清空上一个用户的聊天状态
     set({ user: null, token: null })
   },
 }))
