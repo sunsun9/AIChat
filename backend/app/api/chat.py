@@ -21,6 +21,7 @@ from typing import List, AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user
@@ -268,15 +269,26 @@ def list_conversations(
         .order_by(Conversation.updated_at.desc())
         .all()
     )
+    # 一次 GROUP BY 查询取出所有会话的消息数，避免 N+1
+    conv_ids = [c.id for c in convs]
+    count_map: dict[int, int] = {}
+    if conv_ids:
+        rows = (
+            db.query(Message.conversation_id, func.count(Message.id))
+            .filter(
+                Message.conversation_id.in_(conv_ids),
+                Message.content != "[file upload placeholder]",
+                Message.content != "",
+            )
+            .group_by(Message.conversation_id)
+            .all()
+        )
+        count_map = {conv_id: cnt for conv_id, cnt in rows}
+
     result = []
     for c in convs:
-        count = db.query(Message).filter(
-            Message.conversation_id == c.id,
-            Message.content != "[file upload placeholder]",
-            Message.content != "",
-        ).count()
         out = ConversationOut.model_validate(c).model_dump(mode="json")
-        out["message_count"] = count
+        out["message_count"] = count_map.get(c.id, 0)
         result.append(out)
     return ok(result)
 

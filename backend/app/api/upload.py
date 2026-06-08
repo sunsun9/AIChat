@@ -32,9 +32,10 @@ async def upload_file(
             Conversation.user_id == current_user.id,
         ).first()
         if not conv:
-            conv = Conversation(user_id=current_user.id)
-            db.add(conv)
-            db.flush()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="会话不存在",
+            )
     else:
         conv = Conversation(user_id=current_user.id)
         db.add(conv)
