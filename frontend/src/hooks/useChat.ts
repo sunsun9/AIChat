@@ -29,16 +29,6 @@ export function useChat() {
     [canSend, text, sendMessage],
   )
 
-  function handleKeyDown(
-    e: React.KeyboardEvent<HTMLTextAreaElement>,
-    attachmentIds: number[],
-  ) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      void handleSend(attachmentIds)
-    }
-  }
-
   return {
     text,
     setText,
@@ -48,6 +38,5 @@ export function useChat() {
     error,
     clearError,
     handleSend,
-    handleKeyDown,
   }
 }

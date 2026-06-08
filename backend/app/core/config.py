@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     APP_SECRET_KEY: str = "dev-secret-key-change-in-production"
     APP_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15      # ← 短命 access token
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30        # ← 长效 refresh token（新增）
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7        # ← 长效 refresh token（新增）
 
     # Database
     DATABASE_URL: str = "sqlite:///./aichat.db"

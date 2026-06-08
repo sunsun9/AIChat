@@ -33,6 +33,15 @@ function preprocessMath(content: string): string {
     .replace(/\\\((.+?)\\\)/g, (_m, math) => `$${math}$`)
 }
 
+/**
+ * 同时处理 LaTeX 分隔符 和 <br> 标签：
+ *   <br> / <br/> / <br />  →  两个空格 + 换行（Markdown 强制换行）
+ */
+function preprocessContent(content: string): string {
+  return preprocessMath(content)
+    .replace(/<br\s*\/?>/gi, '  \n')
+}
+
 interface CodeBlockProps {
   className?: string
   children: React.ReactNode
@@ -175,7 +184,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                       },
                     }}
                   >
-                    {preprocessMath(message.content)}
+                    {preprocessContent(message.content)}
                   </ReactMarkdown>
                   {/* 流式进行中：末尾加光标 */}
                   {isStreaming && <StreamingCursor />}

@@ -32,6 +32,13 @@ export default function ChatInput() {
     void chat.handleSend(ids)               // 异步发送，不再等它
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend() // 统一走 handleSend，确保附件也被清空
+    }
+  }
+
   const handleToggleUpload = () => {
     if (showUpload && upload.attachments.length > 0) {
       upload.discardAllAttachments()
@@ -107,7 +114,7 @@ export default function ChatInput() {
           rows={1}
           value={chat.text}
           onChange={(e) => chat.setText(e.target.value)}
-          onKeyDown={(e) => chat.handleKeyDown(e, upload.attachmentIds)}
+          onKeyDown={handleKeyDown}
           placeholder="给智能助手发消息…"
           disabled={chat.sending}
           className="w-full text-sm outline-none resize-none leading-relaxed bg-transparent"
