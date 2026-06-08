@@ -11,7 +11,7 @@ chat.py — 聊天 API
 错误处理改动：
   - LLM 超时、空响应、不可用分类推送到前端 SSE error 事件
   - 流式生成器内部异常不会导致静默失败，统一 yield error 事件并清理 DB
-  - 保留 assistant_msg 占位行的 finally 清理逻辑，避免脏数据
+  - 客户端主动断开（CancelledError）：保存已累积内容而非删除，让用户刷新后仍能看到
 """
 
 import asyncio
@@ -68,12 +68,13 @@ async def _stream_ask(
       metadata → delta × N → done
 
     异常处理层级：
-      LLMTimeoutError      → error 事件（超时提示）
+      LLMTimeoutError       → error 事件（超时提示）
       LLMEmptyResponseError → error 事件（空响应提示）
-      LLMUnavailableError  → error 事件（服务不可用提示）
-      其他 Exception       → error 事件（兜底）
+      LLMUnavailableError   → error 事件（服务不可用提示）
+      asyncio.CancelledError → 保存已累积内容后静默退出（不再删除）
+      其他 Exception        → error 事件（兜底）
 
-    出错时统一删除本次 assistant_msg 占位行，保持 DB 一致性。
+    客户端断开时保留已生成内容，刷新后仍可查看。
     """
     # ── 1. 保存用户消息 ──
     user_msg = Message(
@@ -111,6 +112,7 @@ async def _stream_ask(
     # ── 3. 流式 delta ──
     full_answer: list[str] = []
     llm_error: str | None = None
+    was_cancelled = False
 
     try:
         async for chunk in ask_llm_stream(
@@ -135,16 +137,19 @@ async def _stream_ask(
         logger.error("LLMUnavailableError in stream: %s", exc)
 
     except asyncio.CancelledError:
-        # 客户端断开连接，静默退出，清理 DB
-        llm_error = "_cancelled_"
-        logger.info("SSE stream cancelled by client (conv=%s)", conv.id)
+        # 客户端主动断开：标记为取消，后续保存已累积内容
+        was_cancelled = True
+        logger.info(
+            "SSE stream cancelled by client (conv=%s), accumulated %d chars",
+            conv.id, sum(len(c) for c in full_answer),
+        )
 
     except Exception as exc:
         llm_error = f"AI 服务异常，请稍后重试。（{type(exc).__name__}）"
         logger.exception("Unexpected error in _stream_ask (conv=%s): %s", conv.id, exc)
 
     # ── 4. 出错处理：推送 error 事件 + 回滚 DB ──
-    if llm_error is not None and llm_error != "_cancelled_":
+    if llm_error is not None:
         yield _sse_event("error", {"msg": llm_error})
         # 删除空的 assistant 占位，保持 DB 整洁
         try:
@@ -154,17 +159,33 @@ async def _stream_ask(
             pass
         return
 
-    if llm_error == "_cancelled_":
-        # 客户端断开：静默清理
-        try:
-            db.delete(assistant_msg)
-            db.commit()
-        except Exception:
-            pass
-        return
-
-    # ── 5. 写回完整回复 ──
+    # ── 5. 写回内容（正常完成 或 用户取消但有内容）──
     answer_text = "".join(full_answer)
+
+    if was_cancelled:
+        if answer_text.strip():
+            # 有内容：追加截断标记后保存
+            truncated_text = answer_text + "\n\n> *(已停止生成)*"
+            try:
+                assistant_msg.content = truncated_text
+                db.add(assistant_msg)
+                db.commit()
+                logger.info(
+                    "Saved partial answer (%d chars) for conv=%s",
+                    len(truncated_text), conv.id,
+                )
+            except Exception:
+                pass
+        else:
+            # 没有任何内容：清理占位行
+            try:
+                db.delete(assistant_msg)
+                db.commit()
+            except Exception:
+                pass
+        return  # 取消时不发送 done 事件
+
+    # 正常完成
     assistant_msg.content = answer_text
     db.add(assistant_msg)
     db.commit()
@@ -227,7 +248,6 @@ async def ask(
             used_attachments.append(att)
 
     # ── 3. 并发获取短期历史 + 长期记忆 ──
-    # 设置超时保护，防止 RAG 检索慢时阻塞整个请求
     try:
         short_history, long_memories = await asyncio.wait_for(
             memory_service.get_full_context(
@@ -236,7 +256,7 @@ async def ask(
                 question=payload.question,
                 db=db,
             ),
-            timeout=10,  # 最多等 10 秒
+            timeout=10,
         )
     except asyncio.TimeoutError:
         logger.warning("get_full_context timeout for conv=%s, using empty context", conv.id)
@@ -269,7 +289,6 @@ def list_conversations(
         .order_by(Conversation.updated_at.desc())
         .all()
     )
-    # 一次 GROUP BY 查询取出所有会话的消息数，避免 N+1
     conv_ids = [c.id for c in convs]
     count_map: dict[int, int] = {}
     if conv_ids:
