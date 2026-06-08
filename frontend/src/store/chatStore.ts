@@ -62,43 +62,6 @@ function makeStreamingMessage(): StreamingMessage {
 }
 
 /**
- * 将消息列表中的流式/乐观消息转为普通消息（用于取消时保留内容）。
- * - 流式消息有内容：追加截断标记，转为 Message
- * - 流式消息无内容 / 乐观消息：移除
- */
-function freezeStreamingMessages(
-  messages: (Message | OptimisticMessage | StreamingMessage)[],
-): (Message | OptimisticMessage | StreamingMessage)[] {
-  return messages
-    .map((m) => {
-      if ('isStreaming' in m && m.isStreaming) {
-        if (m.content.trim()) {
-          // 有内容：去掉 isStreaming，保留为普通消息
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { isStreaming, ...rest } = m
-          return {
-            ...rest,
-            id: Date.now(),
-            content: m.content + '\n\n> *(已停止生成)*',
-          } as Message
-        }
-        // 无内容：标记为需要删除
-        return null
-      }
-      if ('isOptimistic' in m && m.isOptimistic) {
-        // 乐观用户消息一并移除（没有对应的 AI 回复时不保留）
-        // 但如果流式消息有内容，用户消息也应保留——通过下方 filter 判断
-        return null
-      }
-      return m
-    })
-    .filter((m): m is Message | OptimisticMessage | StreamingMessage => {
-      if (m === null) return false
-      return true
-    })
-}
-
-/**
  * 取消时：若流式消息有内容，同时保留前面的乐观用户消息（转为普通消息）。
  */
 function freezeAllPendingMessages(
