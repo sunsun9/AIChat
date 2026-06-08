@@ -81,6 +81,20 @@ class ConversationCreate(BaseModel):
     title: Optional[str] = "新对话"
 
 
+class ConversationRename(BaseModel):
+    title: str
+
+    @field_validator("title")
+    @classmethod
+    def title_valid(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("对话名称不能为空")
+        if len(v) > 100:
+            raise ValueError("对话名称最多100个字符")
+        return v
+
+
 class ConversationOut(BaseModel):
     id: int
     title: str

@@ -264,3 +264,8 @@ export async function sendMessageStream(
 export async function removeConversation(id: number): Promise<void> {
   await chatApi.deleteConversation(id)
 }
+
+export async function renameConversation(id: number, title: string): Promise<ConversationSummary> {
+  const { data } = await chatApi.renameConversation(id, title)
+  return data
+}

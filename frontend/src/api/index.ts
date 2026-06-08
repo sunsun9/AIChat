@@ -43,6 +43,9 @@ export const chatApi = {
   getConversation: (id: number): Promise<AxiosResponse<ConversationDetail>> =>
     httpClient.get(`/chat/conversations/${id}`),
 
+  renameConversation: (id: number, title: string): Promise<AxiosResponse<ConversationSummary>> =>
+    httpClient.patch(`/chat/conversations/${id}/title`, { title }),
+
   deleteConversation: (id: number): Promise<AxiosResponse<void>> =>
     httpClient.delete(`/chat/conversations/${id}`),
 }

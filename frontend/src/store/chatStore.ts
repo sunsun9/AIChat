@@ -15,6 +15,7 @@ import {
   fetchConversation,
   sendMessageStream,
   removeConversation,
+  renameConversation,
   makeOptimisticMessage,
   upsertConversationInList,
   extractChatError,
@@ -44,6 +45,7 @@ interface ChatStore {
   sendMessage: (params: SendMessageParams) => Promise<void>
   cancelCurrentRequest: () => void           // 主动取消当前流式请求
   deleteConversation: (id: number) => Promise<void>
+  renameConversation: (id: number, title: string) => Promise<void>
   clearError: () => void
   resetChat: () => void
 }
@@ -277,6 +279,24 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         conversations: state.conversations.filter((c) => c.id !== id),
         activeConversation: state.activeId === id ? null : state.activeConversation,
         activeId: state.activeId === id ? null : state.activeId,
+      }))
+    } catch (err) {
+      set({ error: extractChatError(err) })
+    }
+  },
+
+  // ── 重命名对话 ───
+  renameConversation: async (id, title) => {
+    try {
+      const updated = await renameConversation(id, title)
+      set((state) => ({
+        conversations: state.conversations.map((c) =>
+          c.id === id ? { ...c, title: updated.title } : c
+        ),
+        activeConversation:
+          state.activeId === id && state.activeConversation
+            ? { ...state.activeConversation, title: updated.title }
+            : state.activeConversation,
       }))
     } catch (err) {
       set({ error: extractChatError(err) })

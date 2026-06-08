@@ -29,7 +29,7 @@ from app.models.models import (
     User, UserRole, Conversation, Message, MessageRole, FileAttachment
 )
 from app.schemas.schemas import (
-    ChatRequest, ConversationOut, FileAttachmentInfo, MessageOut
+    ChatRequest, ConversationOut, ConversationRename, FileAttachmentInfo, MessageOut
 )
 from app.services.llm_service import (
     ask_llm_stream,
@@ -311,6 +311,27 @@ def get_conversation(
         MessageOut.model_validate(m).model_dump(mode="json") for m in messages
     ]
     return ok(detail)
+
+
+@router.patch("/conversations/{conv_id}/title")
+def rename_conversation(
+    conv_id: int,
+    payload: ConversationRename,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """修改会话名称。"""
+    conv = db.query(Conversation).filter(
+        Conversation.id == conv_id,
+        Conversation.user_id == current_user.id,
+    ).first()
+    if not conv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+
+    conv.title = payload.title
+    db.commit()
+    db.refresh(conv)
+    return ok(ConversationOut.model_validate(conv).model_dump(mode="json"))
 
 
 @router.delete("/conversations/{conv_id}")

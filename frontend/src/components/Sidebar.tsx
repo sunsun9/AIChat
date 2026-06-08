@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore, selectIsPremium } from '@/store/authStore'
 import { useConversationDelete } from '@/hooks/useConversationDelete'
-import { Plus, MessageSquare, Trash2, LogOut, Zap, User, PanelLeftClose } from 'lucide-react'
+import { Plus, MessageSquare, Trash2, LogOut, Zap, User, PanelLeftClose, Pencil, Check, X } from 'lucide-react'
 
 interface SidebarProps {
   isCollapsed: boolean
@@ -14,14 +14,57 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const isPremium = useAuthStore(selectIsPremium)
   const {
     conversations, activeId, loading,
-    loadConversations, openConversation, newConversation, deleteConversation,
+    loadConversations, openConversation, newConversation,
+    deleteConversation, renameConversation,
   } = useChatStore()
 
   const { pendingId, requestDelete } = useConversationDelete(deleteConversation)
 
+  // ── 重命名状态 ──
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (conversations.length === 0) void loadConversations()
   }, [])
+
+  // 进入编辑模式
+  const startEditing = (e: React.MouseEvent, id: number, currentTitle: string) => {
+    e.stopPropagation()
+    setEditingId(id)
+    setEditingTitle(currentTitle)
+    // 等 input 渲染后聚焦并全选
+    setTimeout(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }, 0)
+  }
+
+  // 确认重命名
+  const confirmRename = async (id: number) => {
+    const trimmed = editingTitle.trim()
+    if (trimmed && trimmed !== conversations.find((c) => c.id === id)?.title) {
+      await renameConversation(id, trimmed)
+    }
+    setEditingId(null)
+  }
+
+  // 取消编辑
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditingTitle('')
+  }
+
+  // 键盘处理
+  const handleKeyDown = (e: React.KeyboardEvent, id: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      void confirmRename(id)
+    } else if (e.key === 'Escape') {
+      cancelEdit()
+    }
+  }
 
   return (
     <aside
@@ -58,7 +101,6 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             </span>
           </div>
 
-          {/* 收起按钮：图标在侧边栏内部右上角 */}
           <button
             onClick={onToggle}
             title="收起侧边栏"
@@ -134,14 +176,14 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
           {conversations.map((conv) => {
             const isActive = activeId === conv.id
             const isPending = pendingId === conv.id
+            const isEditing = editingId === conv.id
+
             return (
-              <button
+              <div
                 key={conv.id}
-                onClick={() => void openConversation(conv.id)}
-                title={conv.title}
-                className="w-full flex items-center gap-2 rounded-lg text-left group transition-all duration-150 mb-0.5"
+                className="w-full flex items-center gap-1.5 rounded-lg group mb-0.5 transition-all duration-150"
                 style={{
-                  padding: '7px 10px',
+                  padding: '5px 6px 5px 10px',
                   background: isActive ? 'var(--accent-dim)' : 'transparent',
                   border: '1px solid',
                   borderColor: isActive
@@ -150,14 +192,14 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-raised)'
-                    ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--bg-border)'
+                    ;(e.currentTarget as HTMLDivElement).style.background = 'var(--bg-raised)'
+                    ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--bg-border)'
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
-                    ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
-                    ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent'
+                    ;(e.currentTarget as HTMLDivElement).style.background = 'transparent'
+                    ;(e.currentTarget as HTMLDivElement).style.borderColor = 'transparent'
                   }
                 }}
               >
@@ -166,35 +208,108 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                   className="flex-shrink-0 mt-px"
                   style={{ color: isActive ? 'var(--accent)' : 'var(--text-faint)' }}
                 />
-                <span
-                  className="flex-1 text-xs truncate"
-                  style={{ color: isActive ? 'var(--text-main)' : 'var(--text-soft)' }}
-                >
-                  {conv.title}
-                </span>
-                {conv.message_count > 0 && (
-                  <span
-                    className="text-[10px] font-mono flex-shrink-0 opacity-0 group-hover:opacity-70 transition-opacity"
-                    style={{ color: 'var(--text-faint)' }}
-                  >
-                    {conv.message_count}
-                  </span>
+
+                {/* ── 标题区：编辑模式 or 展示模式 ── */}
+                {isEditing ? (
+                  /* 编辑状态：input + 确认/取消 */
+                  <>
+                    <input
+                      ref={inputRef}
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, conv.id)}
+                      onBlur={() => void confirmRename(conv.id)}
+                      maxLength={100}
+                      className="flex-1 min-w-0 text-xs bg-transparent outline-none border-b"
+                      style={{
+                        color: 'var(--text-main)',
+                        borderColor: 'var(--accent)',
+                        paddingBottom: '1px',
+                      }}
+                    />
+                    <button
+                      onMouseDown={(e) => {
+                        e.preventDefault()    // 阻止 input onBlur 先触发
+                        void confirmRename(conv.id)
+                      }}
+                      title="确认"
+                      className="flex-shrink-0 p-0.5 rounded transition-colors"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      <Check size={11} />
+                    </button>
+                    <button
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        cancelEdit()
+                      }}
+                      title="取消"
+                      className="flex-shrink-0 p-0.5 rounded transition-colors"
+                      style={{ color: 'var(--text-faint)' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </>
+                ) : (
+                  /* 展示状态：标题 + 操作按钮组 */
+                  <>
+                    <button
+                      className="flex-1 min-w-0 text-left"
+                      onClick={() => void openConversation(conv.id)}
+                      title={conv.title}
+                    >
+                      <span
+                        className="block text-xs truncate"
+                        style={{ color: isActive ? 'var(--text-main)' : 'var(--text-soft)' }}
+                      >
+                        {conv.title}
+                      </span>
+                    </button>
+
+                    {/* 消息数 */}
+                    {conv.message_count > 0 && (
+                      <span
+                        className="text-[10px] font-mono flex-shrink-0 opacity-0 group-hover:opacity-70 transition-opacity"
+                        style={{ color: 'var(--text-faint)' }}
+                      >
+                        {conv.message_count}
+                      </span>
+                    )}
+
+                    {/* 编辑按钮 */}
+                    <button
+                      onClick={(e) => startEditing(e, conv.id, conv.title)}
+                      title="重命名"
+                      className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-all duration-150"
+                      style={{ color: 'var(--text-faint)' }}
+                      onMouseEnter={(e) => {
+                        ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-main)'
+                      }}
+                      onMouseLeave={(e) => {
+                        ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-faint)'
+                      }}
+                    >
+                      <Pencil size={11} />
+                    </button>
+
+                    {/* 删除按钮 */}
+                    <button
+                      onClick={(e) => void requestDelete(e, conv.id)}
+                      title={isPending ? '再次点击确认删除' : '删除'}
+                      className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-all duration-150"
+                      style={{ color: isPending ? '#f43f5e' : 'var(--text-faint)' }}
+                      onMouseEnter={(e) => {
+                        ;(e.currentTarget as HTMLButtonElement).style.color = '#f43f5e'
+                      }}
+                      onMouseLeave={(e) => {
+                        ;(e.currentTarget as HTMLButtonElement).style.color = isPending ? '#f43f5e' : 'var(--text-faint)'
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </>
                 )}
-                <button
-                  onClick={(e) => void requestDelete(e, conv.id)}
-                  title={isPending ? '再次点击确认删除' : '删除'}
-                  className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-all duration-150"
-                  style={{ color: isPending ? '#f43f5e' : 'var(--text-faint)' }}
-                  onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLButtonElement).style.color = '#f43f5e'
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLButtonElement).style.color = isPending ? '#f43f5e' : 'var(--text-faint)'
-                  }}
-                >
-                  <Trash2 size={11} />
-                </button>
-              </button>
+              </div>
             )
           })}
         </div>
