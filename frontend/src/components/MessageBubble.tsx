@@ -1,10 +1,11 @@
+import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Paperclip, Bot, User } from 'lucide-react'
+import { Paperclip, Bot, User, Copy, Check } from 'lucide-react'
 import clsx from 'clsx'
 import type { Message, Attachment, StreamingMessage } from '@/types'
 
@@ -92,6 +93,70 @@ function StreamingCursor() {
 function formatTime(iso: string): string {
   const normalized = /Z$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + 'Z'
   return new Date(normalized).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** AI 消息复制按钮 */
+function CopyButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // fallback for older browsers
+      const textarea = document.createElement('textarea')
+      textarea.value = content
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      title={copied ? '已复制' : '复制内容'}
+      className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono transition-all duration-150"
+      style={{
+        color: copied ? 'var(--accent)' : 'var(--text-faint)',
+        background: copied ? 'var(--accent-dim)' : 'transparent',
+        border: `1px solid ${copied ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'transparent'}`,
+      }}
+      onMouseEnter={(e) => {
+        if (!copied) {
+          (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-soft)'
+          ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-raised)'
+          ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--bg-border)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!copied) {
+          (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-faint)'
+          ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+          ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent'
+        }
+      }}
+    >
+      {copied ? (
+        <>
+          <Check size={10} />
+          <span>已复制</span>
+        </>
+      ) : (
+        <>
+          <Copy size={10} />
+          <span>复制</span>
+        </>
+      )}
+    </button>
+  )
 }
 
 type AnyMessage = Message | StreamingMessage
@@ -194,11 +259,17 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </div>
 
-        {/* 时间戳：流式进行中不显示 */}
+        {/* 时间戳 + 复制按钮行：仅 AI 消息，流式结束后显示 */}
         {!isOptimistic && !isStreaming && (
-          <span className="text-[10px] font-mono px-1" style={{ color: 'var(--text-faint)' }}>
-            {formatTime(message.created_at)}
-          </span>
+          <div className={clsx('flex items-center gap-1.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
+            <span className="text-[10px] font-mono px-1" style={{ color: 'var(--text-faint)' }}>
+              {formatTime(message.created_at)}
+            </span>
+            {/* 仅 AI 消息显示复制按钮 */}
+            {!isUser && message.content && (
+              <CopyButton content={message.content} />
+            )}
+          </div>
         )}
       </div>
     </div>
